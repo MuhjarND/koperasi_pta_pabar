@@ -9,12 +9,45 @@
         $filterRoute = $isMember ? route('anggota.loans.payments') : route('bendahara.loans.payments');
     @endphp
 
+    @if($isMember)
+        <div class="summary-grid" style="margin-bottom: 16px;">
+            <div class="summary-item accent">
+                <div class="label">Total Pinjaman</div>
+                <div class="value">{{ isset($memberSummary['loans']) ? count($memberSummary['loans']) : 0 }} pinjaman</div>
+            </div>
+            <div class="summary-item">
+                <div class="label">Total Terbayar</div>
+                <div class="value">Rp {{ number_format($memberSummary['total_paid_amount'] ?? 0, 2, ',', '.') }}</div>
+            </div>
+            <div class="summary-item warning">
+                <div class="label">Sisa Tagihan</div>
+                @php
+                    $dueAmount = $memberSummary['total_due_amount'] ?? 0;
+                    $paidAmount = $memberSummary['total_paid_amount'] ?? 0;
+                    $remainingAmount = max($dueAmount - $paidAmount, 0);
+                @endphp
+                <div class="value">Rp {{ number_format($remainingAmount, 2, ',', '.') }}</div>
+            </div>
+            <div class="summary-item">
+                <div class="label">Angsuran</div>
+                <div class="value">
+                    {{ $memberSummary['settled_installments'] ?? 0 }}/{{ $memberSummary['total_installments'] ?? 0 }} lunas
+                </div>
+            </div>
+        </div>
+    @endif
+
     <div class="card">
         <div class="card-header">
             <div class="card-title">
                 <div class="card-icon">@include('partials.icon', ['name' => 'wallet'])</div>
                 <h3>Rekap Peminjaman</h3>
             </div>
+            @if(!in_array($role, ['anggota', 'bendahara_kantor']))
+                <div class="action-row">
+                    <button class="btn btn-ghost" type="button" data-modal-open="loans-rekap-modal">Preview Rekap PDF</button>
+                </div>
+            @endif
         </div>
         <form method="get" action="{{ $filterRoute }}" class="action-row" style="margin-bottom: 16px;">
             <input type="search" name="q" value="{{ $search ?? '' }}" placeholder="Cari nama anggota...">
@@ -199,6 +232,83 @@
             </tbody>
         </table>
     </div>
+
+    @if(!in_array($role, ['anggota', 'bendahara_kantor']))
+        <dialog class="modal" id="loans-rekap-modal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <div>
+                        <h3>Preview Rekap Peminjaman (PDF)</h3>
+                        <p class="muted">Pratinjau rekap peminjaman dalam format PDF.</p>
+                    </div>
+                    <button class="btn btn-ghost" type="button" data-modal-close-rekap>Keluar</button>
+                </div>
+                <div class="action-row" style="margin-bottom: 12px;">
+                    <label class="muted" style="font-size: 13px;">Filter Bulan</label>
+                    <select id="loans-rekap-month-filter">
+                        <option value="all">Semua</option>
+                        @foreach($monthNames as $number => $label)
+                            <option value="{{ $number }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <iframe class="pdf-preview" src="{{ route('loans.rekap.pdf') }}" title="Rekap Peminjaman PDF" data-rekap-src="{{ route('loans.rekap.pdf') }}"></iframe>
+            </div>
+        </dialog>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const modal = document.getElementById('loans-rekap-modal');
+                const monthFilter = document.getElementById('loans-rekap-month-filter');
+                const iframe = modal ? modal.querySelector('.pdf-preview') : null;
+                const openButtons = document.querySelectorAll('[data-modal-open="loans-rekap-modal"]');
+                const closeButtons = modal ? modal.querySelectorAll('[data-modal-close-rekap]') : [];
+
+                const openModal = () => {
+                    if (!modal) return;
+                    if (typeof modal.showModal === 'function') {
+                        modal.showModal();
+                    } else {
+                        modal.setAttribute('open', 'open');
+                    }
+                };
+
+                const closeModal = () => {
+                    if (!modal) return;
+                    if (typeof modal.close === 'function') {
+                        modal.close();
+                    } else {
+                        modal.removeAttribute('open');
+                    }
+                };
+
+                openButtons.forEach((btn) => {
+                    btn.addEventListener('click', openModal);
+                });
+
+                closeButtons.forEach((btn) => {
+                    btn.addEventListener('click', closeModal);
+                });
+
+                if (monthFilter && iframe) {
+                    const baseUrl = iframe.getAttribute('data-rekap-src') || '';
+                    monthFilter.addEventListener('change', () => {
+                        const month = monthFilter.value || 'all';
+                        const url = month === 'all' ? baseUrl : (baseUrl + '?month=' + month);
+                        iframe.src = url;
+                    });
+                }
+
+                if (modal) {
+                    modal.addEventListener('click', (event) => {
+                        if (event.target === modal) {
+                            closeModal();
+                        }
+                    });
+                }
+            });
+        </script>
+    @endif
 
     <dialog class="modal" id="payment-modal">
         <div class="modal-card">

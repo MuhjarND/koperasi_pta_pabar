@@ -8,6 +8,25 @@
         $badgeClass = config('koperasi.status_badges');
     @endphp
 
+    <div class="summary-grid" style="margin-bottom: 16px;">
+        <div class="summary-item accent">
+            <div class="label">Total Pengajuan</div>
+            <div class="value">{{ $loanSummary['total'] ?? 0 }} pengajuan</div>
+        </div>
+        <div class="summary-item">
+            <div class="label">Disetujui</div>
+            <div class="value">Rp {{ number_format($loanSummary['approved_amount'] ?? 0, 2, ',', '.') }}</div>
+        </div>
+        <div class="summary-item warning">
+            <div class="label">Menunggu</div>
+            <div class="value">{{ $loanSummary['pending'] ?? 0 }} pengajuan</div>
+        </div>
+        <div class="summary-item">
+            <div class="label">Ditolak</div>
+            <div class="value">{{ $loanSummary['rejected'] ?? 0 }} pengajuan</div>
+        </div>
+    </div>
+
     <div class="action-row" style="margin-bottom: 16px;">
         <a class="btn btn-primary" href="{{ route('anggota.loans.create') }}">Ajukan Pinjaman</a>
     </div>
@@ -26,23 +45,25 @@
                     <th>Tenor</th>
                     <th>Status</th>
                     <th>Tanggal</th>
-                    <th>Form PDF</th>
+                    <th>Dokumen</th>
                 </tr>
             </thead>
             <tbody>
                 @forelse($loans as $loan)
                     <tr>
-                        <td>Rp {{ number_format($loan->amount, 2, ',', '.') }}</td>
-                        <td>{{ $loan->term_months }} bulan</td>
-                        <td>
+                        <td data-label="Nominal">Rp {{ number_format($loan->amount, 2, ',', '.') }}</td>
+                        <td data-label="Tenor">{{ $loan->term_months }} bulan</td>
+                        <td data-label="Status">
                             <span class="badge {{ $badgeClass[$loan->status] ?? '' }}">
                                 {{ $statusLabels[$loan->status] ?? $loan->status }}
                             </span>
                         </td>
-                        <td>{{ $loan->created_at }}</td>
-                        <td>
-                            @if($loan->status === 'approved_chairman' && $loan->pdf_path)
-                                <a class="btn btn-ghost" href="{{ asset($loan->pdf_path) }}" target="_blank" rel="noopener">Lihat PDF</a>
+                        <td data-label="Tanggal">{{ $loan->created_at }}</td>
+                        <td data-label="Dokumen">
+                            @if($loan->status === 'approved_chairman' && $loan->transfer_evidence_path)
+                                <a class="btn btn-ghost" href="{{ route('anggota.loans.document', $loan->id) }}">Lihat Dokumen</a>
+                            @elseif($loan->status === 'approved_chairman')
+                                <span class="muted">Menunggu pencairan</span>
                             @else
                                 <span class="muted">Belum tersedia</span>
                             @endif

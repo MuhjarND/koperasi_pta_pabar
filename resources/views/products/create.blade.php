@@ -18,10 +18,6 @@
                 <input type="text" name="name" value="{{ old('name') }}" required>
             </div>
             <div class="form-control">
-                <label>SKU</label>
-                <input type="text" name="sku" value="{{ old('sku') }}">
-            </div>
-            <div class="form-control">
                 <label>Unit</label>
                 <input type="text" name="unit" value="{{ old('unit', 'pcs') }}">
             </div>

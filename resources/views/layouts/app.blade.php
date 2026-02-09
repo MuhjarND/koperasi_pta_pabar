@@ -25,20 +25,28 @@
             </div>
         </aside>
         <main class="main">
+            @php
+                $twoFactorActive = !empty($authUser['two_factor_enabled']);
+            @endphp
             <div class="page-header">
                 <div class="page-title">
                     <h1>@yield('title')</h1>
                     <p>@yield('subtitle')</p>
                 </div>
-                <div class="user-pill">
-                    <div>
-                        <div class="user-role">{{ config('koperasi.roles.' . ($authUser['role'] ?? '')) }}</div>
-                        <div>{{ $authUser['name'] ?? 'User' }}</div>
+                <div class="user-actions">
+                    <a class="icon-button icon-button--qr {{ $twoFactorActive ? 'icon-button--ok' : 'icon-button--alert' }}" href="{{ route('authenticator.setup') }}" title="Authenticator">
+                        @include('partials.icon', ['name' => 'qr'])
+                    </a>
+                    <div class="user-pill">
+                        <div>
+                            <div class="user-role">{{ config('koperasi.roles.' . ($authUser['role'] ?? '')) }}</div>
+                            <div>{{ $authUser['name'] ?? 'User' }}</div>
+                        </div>
+                        <form method="post" action="{{ route('logout') }}">
+                            @csrf
+                            <button class="btn btn-ghost" type="submit">Keluar</button>
+                        </form>
                     </div>
-                    <form method="post" action="{{ route('logout') }}">
-                        @csrf
-                        <button class="btn btn-ghost" type="submit">Keluar</button>
-                    </form>
                 </div>
             </div>
 

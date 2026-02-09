@@ -69,5 +69,7 @@
             </form>
         </div>
     </div>
+
+    @include('loans.partials.approval_history', ['loan' => $loan])
 @endsection
 

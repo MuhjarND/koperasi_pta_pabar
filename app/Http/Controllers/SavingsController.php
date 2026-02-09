@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use Barryvdh\DomPDF\Facade as PDF;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -48,6 +49,7 @@ class SavingsController extends Controller
             ->get();
 
         $memberSummaries = [];
+        $memberTypeTotals = array_fill_keys($types, 0);
 
         foreach ($rows as $row) {
             if (!isset($memberSummaries[$row->id])) {
@@ -80,6 +82,10 @@ class SavingsController extends Controller
             $memberSummaries[$row->id]['months'][$monthKey]['types'][$row->type] += (float) $row->amount;
             $memberSummaries[$row->id]['months'][$monthKey]['total'] += (float) $row->amount;
             $memberSummaries[$row->id]['total_amount'] += (float) $row->amount;
+
+            if (isset($memberTypeTotals[$row->type])) {
+                $memberTypeTotals[$row->type] += (float) $row->amount;
+            }
 
             $isManual = $row->note !== 'Potong Gaji';
             if ($isManual) {
@@ -132,13 +138,134 @@ class SavingsController extends Controller
             ];
         }
 
+        $summaryTotals = [
+            'total' => array_sum($memberTypeTotals),
+            'types' => $memberTypeTotals,
+            'members' => count($memberSummaries),
+        ];
+
         return view('savings.index', [
             'role' => $role,
             'types' => config('koperasi.savings_types'),
             'members' => $members,
             'memberSummaries' => array_values($memberSummaries),
             'pendingSavings' => $pendingSavings,
+            'memberTypeTotals' => $role === 'anggota' ? $memberTypeTotals : [],
+            'summaryTotals' => $summaryTotals,
+            'monthNames' => $monthNames,
         ]);
+    }
+
+    public function rekapPdf(Request $request)
+    {
+        $role = $request->session()->get('auth.role');
+        if (in_array($role, ['anggota', 'bendahara_kantor'])) {
+            abort(403);
+        }
+
+        $types = array_keys(config('koperasi.savings_types'));
+        $monthNames = [
+            1 => 'Januari',
+            2 => 'Februari',
+            3 => 'Maret',
+            4 => 'April',
+            5 => 'Mei',
+            6 => 'Juni',
+            7 => 'Juli',
+            8 => 'Agustus',
+            9 => 'September',
+            10 => 'Oktober',
+            11 => 'November',
+            12 => 'Desember',
+        ];
+
+        $monthParam = $request->query('month', 'all');
+        $year = now()->year;
+        $rowsQuery = DB::table('savings_transactions')
+            ->join('users', 'savings_transactions.user_id', '=', 'users.id')
+            ->select(
+                'users.id',
+                'users.name',
+                'users.member_no',
+                'savings_transactions.type',
+                'savings_transactions.amount',
+                'savings_transactions.created_at'
+            )
+            ->orderBy('users.name')
+            ->orderBy('savings_transactions.created_at');
+
+        if ($monthParam !== 'all') {
+            $monthValue = (int) $monthParam;
+            if ($monthValue >= 1 && $monthValue <= 12) {
+                $rowsQuery->whereYear('savings_transactions.created_at', $year)
+                    ->whereMonth('savings_transactions.created_at', $monthValue);
+            }
+        }
+
+        $rows = $rowsQuery->get();
+
+        $memberSummaries = [];
+        $memberTypeTotals = array_fill_keys($types, 0);
+
+        foreach ($rows as $row) {
+            if (!isset($memberSummaries[$row->id])) {
+                $memberSummaries[$row->id] = [
+                    'id' => $row->id,
+                    'name' => $row->name,
+                    'member_no' => $row->member_no,
+                    'total_amount' => 0,
+                    'months' => [],
+                ];
+            }
+
+            $monthKey = date('Y-m', strtotime($row->created_at));
+            $monthNumber = (int) date('n', strtotime($row->created_at));
+            $yearNumber = (int) date('Y', strtotime($row->created_at));
+            $monthLabel = ($monthNames[$monthNumber] ?? $monthNumber) . ' ' . $yearNumber;
+
+            if (!isset($memberSummaries[$row->id]['months'][$monthKey])) {
+                $memberSummaries[$row->id]['months'][$monthKey] = [
+                    'label' => $monthLabel,
+                    'types' => array_fill_keys($types, 0),
+                    'total' => 0,
+                ];
+            }
+
+            $memberSummaries[$row->id]['months'][$monthKey]['types'][$row->type] += (float) $row->amount;
+            $memberSummaries[$row->id]['months'][$monthKey]['total'] += (float) $row->amount;
+            $memberSummaries[$row->id]['total_amount'] += (float) $row->amount;
+
+            if (isset($memberTypeTotals[$row->type])) {
+                $memberTypeTotals[$row->type] += (float) $row->amount;
+            }
+        }
+
+        foreach ($memberSummaries as $id => $member) {
+            $memberSummaries[$id]['months'] = array_values($memberSummaries[$id]['months']);
+        }
+
+        $summaryTotals = [
+            'total' => array_sum($memberTypeTotals),
+            'types' => $memberTypeTotals,
+            'members' => count($memberSummaries),
+        ];
+
+        $periodLabel = 'Januari - ' . now()->translatedFormat('F Y');
+        if ($monthParam !== 'all') {
+            $monthValue = (int) $monthParam;
+            if ($monthValue >= 1 && $monthValue <= 12) {
+                $periodLabel = ($monthNames[$monthValue] ?? $monthValue) . ' ' . $year;
+            }
+        }
+
+        $pdf = PDF::loadView('savings.rekap_pdf', [
+            'memberSummaries' => array_values($memberSummaries),
+            'types' => config('koperasi.savings_types'),
+            'summaryTotals' => $summaryTotals,
+            'periodLabel' => $periodLabel,
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->stream('rekap-simpanan.pdf');
     }
 
     public function store(Request $request)

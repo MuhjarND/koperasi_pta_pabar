@@ -7,6 +7,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use App\Services\FonnteService;
 
 class LoanController extends Controller
 {
@@ -15,13 +16,49 @@ class LoanController extends Controller
         $userId = $request->session()->get('auth.id');
 
         $loans = DB::table('loans')
-            ->select('id', 'amount', 'term_months', 'status', 'created_at', 'pdf_path')
+            ->select('id', 'amount', 'term_months', 'status', 'created_at', 'pdf_path', 'transfer_evidence_path')
             ->where('user_id', $userId)
             ->orderByDesc('created_at')
             ->get();
 
+        $loanSummary = [
+            'total' => $loans->count(),
+            'approved' => $loans->where('status', 'approved_chairman')->count(),
+            'pending' => $loans->whereIn('status', ['submitted', 'reviewed', 'approved_treasurer'])->count(),
+            'rejected' => $loans->where('status', 'rejected')->count(),
+            'total_amount' => (float) $loans->sum('amount'),
+            'approved_amount' => (float) $loans->where('status', 'approved_chairman')->sum('amount'),
+        ];
+
         return view('loans.member.index', [
             'loans' => $loans,
+            'statusLabels' => config('koperasi.status_labels'),
+            'loanSummary' => $loanSummary,
+        ]);
+    }
+
+    public function memberDocument($id, Request $request)
+    {
+        $userId = $request->session()->get('auth.id');
+        $loan = DB::table('loans')
+            ->select('id', 'amount', 'term_months', 'status', 'created_at', 'pdf_path', 'transfer_evidence_path')
+            ->where('id', $id)
+            ->where('user_id', $userId)
+            ->first();
+
+        if (!$loan) {
+            return redirect()
+                ->route('anggota.loans.index')
+                ->withErrors(['error' => 'Dokumen pinjaman tidak ditemukan.']);
+        }
+        if ($loan->status !== 'approved_chairman' || empty($loan->transfer_evidence_path)) {
+            return redirect()
+                ->route('anggota.loans.index')
+                ->withErrors(['error' => 'Dokumen pencairan belum tersedia.']);
+        }
+
+        return view('loans.member.document', [
+            'loan' => $loan,
             'statusLabels' => config('koperasi.status_labels'),
         ]);
     }
@@ -125,6 +162,22 @@ class LoanController extends Controller
         ]);
 
         $this->generateLoanPdf($loanId);
+
+        $notifier = new FonnteService();
+        $amountLabel = number_format((float) $payload['amount'], 2, ',', '.');
+        $memberLabel = ($member->name ?? 'Anggota') . ($member->member_no ? ' (' . $member->member_no . ')' : '');
+        $sekretarisLink = route('sekretaris.loans.index');
+        $notifier->notifyRole(
+            'sekretaris',
+            $notifier->formatMessage([
+                "📌 Pengajuan pinjaman baru.",
+                "Nama: {$member->name}",
+                "No. Anggota: " . ($member->member_no ?? '-'),
+                "Nominal: Rp {$amountLabel}",
+                "Tujuan: {$payload['purpose']}",
+                "Tindak lanjut: {$sekretarisLink}",
+            ], '🤝')
+        );
 
         return redirect()
             ->route('anggota.loans.index')
@@ -406,15 +459,19 @@ class LoanController extends Controller
 
     public function sekretarisIndex()
     {
-        $loans = DB::table('loans')
-            ->join('users', 'loans.user_id', '=', 'users.id')
-            ->select('loans.id', 'users.name', 'loans.amount', 'loans.term_months', 'loans.created_at')
+        $baseQuery = $this->approvalBaseQuery();
+        $loans = (clone $baseQuery)
             ->where('loans.status', 'submitted')
             ->orderByDesc('loans.created_at')
+            ->get();
+        $historyLoans = (clone $baseQuery)
+            ->orderByDesc('loans.updated_at')
+            ->limit(10)
             ->get();
 
         return view('loans.sekretaris.index', [
             'loans' => $loans,
+            'historyLoans' => $historyLoans,
         ]);
     }
 
@@ -452,7 +509,7 @@ class LoanController extends Controller
         ];
 
         if ($decision['decision'] === 'approve') {
-            $updates['status'] = 'reviewed';
+            $updates['status'] = 'approved_treasurer';
             $updates['reviewed_at'] = now();
         } else {
             $updates['status'] = 'rejected';
@@ -461,8 +518,36 @@ class LoanController extends Controller
 
         DB::table('loans')->where('id', $id)->update($updates);
 
+        $amountLabel = number_format((float) $loan->amount, 2, ',', '.');
+        $member = DB::table('users')->select('name', 'member_no')->where('id', $loan->user_id)->first();
         if ($decision['decision'] === 'approve') {
             $this->generateLoanPdf($id);
+            $memberLabel = ($member->name ?? 'Anggota') . ($member->member_no ? ' (' . $member->member_no . ')' : '');
+            $ketuaLink = route('ketua.loans.index');
+            $notifier = new FonnteService();
+            $notifier->notifyRole(
+                'ketua',
+                $notifier->formatMessage([
+                    "✅ Pengajuan pinjaman telah direview sekretaris.",
+                    "Nama: " . ($member->name ?? 'Anggota'),
+                    "No. Anggota: " . ($member->member_no ?? '-'),
+                    "Nominal: Rp {$amountLabel}",
+                    "Tujuan: " . ($loan->purpose ?? '-'),
+                    "Tindak lanjut: {$ketuaLink}",
+                ], '🤝')
+            );
+        } else {
+            $memberLink = route('anggota.loans.index');
+            $notifier = new FonnteService();
+            $notifier->notifyUser(
+                $loan->user_id,
+                $notifier->formatMessage([
+                    "❌ Pengajuan pinjaman Anda ditolak oleh sekretaris.",
+                    "Nominal: Rp {$amountLabel}",
+                    "Tujuan: " . ($loan->purpose ?? '-'),
+                    "Detail: {$memberLink}",
+                ], '🙏', $member->name ?? null)
+            );
         }
 
         return redirect()
@@ -472,16 +557,114 @@ class LoanController extends Controller
 
     public function bendaharaIndex()
     {
-        $loans = DB::table('loans')
-            ->join('users', 'loans.user_id', '=', 'users.id')
-            ->select('loans.id', 'users.name', 'loans.amount', 'loans.term_months', 'loans.created_at')
+        $baseQuery = $this->approvalBaseQuery();
+        $loans = (clone $baseQuery)
             ->where('loans.status', 'reviewed')
             ->orderByDesc('loans.created_at')
+            ->get();
+        $historyLoans = (clone $baseQuery)
+            ->orderByDesc('loans.updated_at')
+            ->limit(10)
             ->get();
 
         return view('loans.bendahara.index', [
             'loans' => $loans,
+            'historyLoans' => $historyLoans,
         ]);
+    }
+
+    public function bendaharaDisbursementIndex()
+    {
+        $loans = DB::table('loans')
+            ->join('users', 'loans.user_id', '=', 'users.id')
+            ->select(
+                'loans.id',
+                'users.name',
+                'users.member_no',
+                'loans.amount',
+                'loans.term_months',
+                'loans.chairman_approved_at',
+                'loans.pdf_path'
+            )
+            ->where('loans.status', 'approved_chairman')
+            ->whereNull('loans.transfer_evidence_path')
+            ->orderByDesc('loans.chairman_approved_at')
+            ->get();
+
+        return view('loans.bendahara.disbursement', [
+            'loans' => $loans,
+        ]);
+    }
+
+    public function bendaharaDisbursementStore(Request $request, $id)
+    {
+        $payload = $request->validate([
+            'transfer_evidence' => 'required|file|mimes:jpg,jpeg,png,pdf|max:2048',
+        ]);
+
+        $loan = DB::table('loans')->where('id', $id)->first();
+        if (!$loan || $loan->status !== 'approved_chairman') {
+            return redirect()->route('bendahara.loans.disbursement');
+        }
+
+        if (!empty($loan->transfer_evidence_path)) {
+            return redirect()
+                ->route('bendahara.loans.disbursement')
+                ->withErrors(['error' => 'Bukti transfer sudah diunggah.']);
+        }
+
+        $folder = 'uploads/loan-transfers';
+        $publicFolder = public_path($folder);
+        if (!is_dir($publicFolder)) {
+            mkdir($publicFolder, 0755, true);
+        }
+
+        $file = $request->file('transfer_evidence');
+        $filename = 'transfer_' . $loan->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+        $file->move($publicFolder, $filename);
+        $transferPath = $folder . '/' . $filename;
+
+        DB::table('loans')
+            ->where('id', $loan->id)
+            ->update([
+                'transfer_evidence_path' => $transferPath,
+                'transfered_at' => now(),
+                'transfered_by' => $request->session()->get('auth.id'),
+                'updated_at' => now(),
+            ]);
+
+        $memberName = DB::table('users')
+            ->where('id', $loan->user_id)
+            ->value('name');
+
+        DB::table('cash_entries')->insert([
+            'entry_date' => now()->toDateString(),
+            'direction' => 'out',
+            'description' => 'Peminjaman (' . ($memberName ?? 'Anggota') . ')',
+            'amount' => $loan->amount,
+            'category' => 'peminjaman',
+            'evidence_path' => $transferPath,
+            'status' => 'approved',
+            'created_by' => $request->session()->get('auth.id'),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $detailLink = route('anggota.loans.document', $loan->id);
+        $notifier = new FonnteService();
+        $notifier->notifyUser(
+            $loan->user_id,
+            $notifier->formatMessage([
+                "✅ Pengajuan pinjaman Anda telah dicairkan.",
+                "Nominal: Rp " . number_format((float) $loan->amount, 2, ',', '.'),
+                "Tujuan: " . ($loan->purpose ?? '-'),
+                "Detail dokumen: {$detailLink}",
+            ], '🎉', $memberName ?? null)
+        );
+
+        return redirect()
+            ->route('bendahara.loans.disbursement')
+            ->with('success', 'Bukti transfer berhasil diunggah.');
     }
 
     public function bendaharaMembers(Request $request)
@@ -708,7 +891,7 @@ class LoanController extends Controller
         ];
 
         if ($decision['decision'] === 'approve') {
-            $updates['status'] = 'approved_treasurer';
+            $updates['status'] = 'approved_chairman';
             $updates['treasurer_approved_at'] = now();
         } else {
             $updates['status'] = 'rejected';
@@ -717,8 +900,36 @@ class LoanController extends Controller
 
         DB::table('loans')->where('id', $id)->update($updates);
 
+        $amountLabel = number_format((float) $loan->amount, 2, ',', '.');
+        $member = DB::table('users')->select('name', 'member_no')->where('id', $loan->user_id)->first();
         if ($decision['decision'] === 'approve') {
             $this->generateLoanPdf($id);
+            $memberLabel = ($member->name ?? 'Anggota') . ($member->member_no ? ' (' . $member->member_no . ')' : '');
+            $disbursementLink = route('bendahara.loans.disbursement');
+            $notifier = new FonnteService();
+            $notifier->notifyRole(
+                'bendahara',
+                $notifier->formatMessage([
+                    "✅ Pengajuan pinjaman telah disetujui bendahara.",
+                    "Nama: " . ($member->name ?? 'Anggota'),
+                    "No. Anggota: " . ($member->member_no ?? '-'),
+                    "Nominal: Rp {$amountLabel}",
+                    "Tujuan: " . ($loan->purpose ?? '-'),
+                    "Tindak lanjut pencairan: {$disbursementLink}",
+                ], '🤝')
+            );
+        } else {
+            $memberLink = route('anggota.loans.index');
+            $notifier = new FonnteService();
+            $notifier->notifyUser(
+                $loan->user_id,
+                $notifier->formatMessage([
+                    "❌ Pengajuan pinjaman Anda ditolak oleh bendahara.",
+                    "Nominal: Rp {$amountLabel}",
+                    "Tujuan: " . ($loan->purpose ?? '-'),
+                    "Detail: {$memberLink}",
+                ], '🙏', $member->name ?? null)
+            );
         }
 
         return redirect()
@@ -728,15 +939,19 @@ class LoanController extends Controller
 
     public function ketuaIndex()
     {
-        $loans = DB::table('loans')
-            ->join('users', 'loans.user_id', '=', 'users.id')
-            ->select('loans.id', 'users.name', 'loans.amount', 'loans.term_months', 'loans.created_at')
+        $baseQuery = $this->approvalBaseQuery();
+        $loans = (clone $baseQuery)
             ->where('loans.status', 'approved_treasurer')
             ->orderByDesc('loans.created_at')
+            ->get();
+        $historyLoans = (clone $baseQuery)
+            ->orderByDesc('loans.updated_at')
+            ->limit(10)
             ->get();
 
         return view('loans.ketua.index', [
             'loans' => $loans,
+            'historyLoans' => $historyLoans,
         ]);
     }
 
@@ -774,7 +989,7 @@ class LoanController extends Controller
         ];
 
         if ($decision['decision'] === 'approve') {
-            $updates['status'] = 'approved_chairman';
+            $updates['status'] = 'reviewed';
             $updates['chairman_approved_at'] = now();
         } else {
             $updates['status'] = 'rejected';
@@ -782,31 +997,38 @@ class LoanController extends Controller
         }
 
         DB::table('loans')->where('id', $id)->update($updates);
+        $member = DB::table('users')->select('name', 'member_no')->where('id', $loan->user_id)->first();
 
         if ($decision['decision'] === 'approve') {
             $this->generateLoanPdf($id);
         }
 
         if ($decision['decision'] === 'approve') {
-            $memberName = DB::table('users')
-                ->where('id', $loan->user_id)
-                ->value('name');
-            $pdfPath = DB::table('loans')
-                ->where('id', $loan->id)
-                ->value('pdf_path');
-
-            DB::table('cash_entries')->insert([
-                'entry_date' => now()->toDateString(),
-                'direction' => 'out',
-                'description' => 'Peminjaman (' . ($memberName ?? 'Anggota') . ')',
-                'amount' => $loan->amount,
-                'category' => 'peminjaman',
-                'evidence_path' => $pdfPath,
-                'status' => 'approved',
-                'created_by' => $request->session()->get('auth.id'),
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            $notifier = new FonnteService();
+            $bendaharaLink = route('bendahara.loans.index');
+            $notifier->notifyRole(
+                'bendahara',
+                $notifier->formatMessage([
+                    "✅ Pengajuan pinjaman disetujui ketua dan menunggu persetujuan bendahara.",
+                    "Nama: " . ($member->name ?? 'Anggota'),
+                    "No. Anggota: " . ($member->member_no ?? '-'),
+                    "Nominal: Rp " . number_format((float) $loan->amount, 2, ',', '.'),
+                    "Tujuan: " . ($loan->purpose ?? '-'),
+                    "Tindak lanjut: {$bendaharaLink}",
+                ], '🤝')
+            );
+        } else {
+            $memberLink = route('anggota.loans.index');
+            $notifier = new FonnteService();
+            $notifier->notifyUser(
+                $loan->user_id,
+                $notifier->formatMessage([
+                    "❌ Pengajuan pinjaman Anda ditolak oleh ketua.",
+                    "Nominal: Rp " . number_format((float) $loan->amount, 2, ',', '.'),
+                    "Tujuan: " . ($loan->purpose ?? '-'),
+                    "Detail: {$memberLink}",
+                ], '🙏', $member->name ?? null)
+            );
         }
 
         return redirect()
@@ -830,5 +1052,29 @@ class LoanController extends Controller
             )
             ->where('loans.id', $id)
             ->first();
+    }
+
+    private function approvalBaseQuery()
+    {
+        return DB::table('loans')
+            ->join('users', 'loans.user_id', '=', 'users.id')
+            ->leftJoin('users as sekretaris', 'loans.sekretaris_id', '=', 'sekretaris.id')
+            ->leftJoin('users as bendahara', 'loans.bendahara_id', '=', 'bendahara.id')
+            ->leftJoin('users as ketua', 'loans.ketua_id', '=', 'ketua.id')
+            ->select(
+                'loans.id',
+                'users.name',
+                'loans.amount',
+                'loans.term_months',
+                'loans.created_at',
+                'loans.status',
+                'loans.reviewed_at',
+                'loans.treasurer_approved_at',
+                'loans.chairman_approved_at',
+                'loans.rejected_at',
+                'sekretaris.name as sekretaris_name',
+                'bendahara.name as bendahara_name',
+                'ketua.name as ketua_name'
+            );
     }
 }

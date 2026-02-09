@@ -44,49 +44,133 @@
         <div class="card-header">
             <div class="card-title">
                 <div class="card-icon">@include('partials.icon', ['name' => 'coins'])</div>
-                <h3>Simpanan Saya</h3>
+                <h3>Rekap Simpanan & Pemotongan</h3>
             </div>
             <a class="btn btn-ghost" href="{{ route('savings.index') }}">Lihat Detail</a>
         </div>
-        <details class="loan-drop">
-            <summary>
-                <div class="loan-drop-title">
-                    <span>{{ $savingsSummary['name'] }}</span>
-                    <span class="muted">({{ $savingsSummary['member_no'] ?? '-' }})</span>
-                </div>
-                <span class="loan-drop-meta">Total Rp {{ number_format($savingsSummary['total_amount'], 2, ',', '.') }}</span>
-            </summary>
-            <div class="loan-drop-body">
-                @if(count($savingsSummary['months']))
-                    <div class="loan-subcard">
-                        <table class="table table-compact table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Bulan</th>
-                                    @foreach($savingsTypes as $label)
-                                        <th>{{ $label }}</th>
-                                    @endforeach
-                                    <th>Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($savingsSummary['months'] as $month)
-                                    <tr>
-                                        <td>{{ $month['label'] }}</td>
-                                        @foreach($savingsTypes as $key => $label)
-                                            <td>Rp {{ number_format($month['types'][$key] ?? 0, 2, ',', '.') }}</td>
-                                        @endforeach
-                                        <td>Rp {{ number_format($month['total'], 2, ',', '.') }}</td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
+        <div class="grid-two">
+            <div class="loan-subcard">
+                <div class="loan-subheader">
+                    <div>
+                        <strong>Simpanan Saya</strong>
+                        <div class="muted">{{ $savingsSummary['name'] }} ({{ $savingsSummary['member_no'] ?? '-' }})</div>
                     </div>
-                @else
-                    <div class="muted">Belum ada transaksi simpanan.</div>
-                @endif
+                </div>
+                <div class="summary-grid">
+                    <div class="summary-item accent">
+                        <div class="label">Total Simpanan</div>
+                        <div class="value">Rp {{ number_format($savingsSummary['total_amount'], 2, ',', '.') }}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Bulan Tercatat</div>
+                        <div class="value">{{ count($savingsSummary['months']) }} bulan</div>
+                    </div>
+                </div>
+                <details class="loan-drop" style="margin-top: 12px;">
+                    <summary>
+                        <div class="loan-drop-title">
+                            <span>Rincian Bulanan Simpanan</span>
+                        </div>
+                        <span class="loan-drop-meta">Klik untuk melihat detail</span>
+                    </summary>
+                    <div class="loan-drop-body">
+                        @if(count($savingsSummary['months']))
+                            <div class="loan-subcard">
+                                <table class="table table-compact table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Bulan</th>
+                                            @foreach($savingsTypes as $label)
+                                                <th>{{ $label }}</th>
+                                            @endforeach
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($savingsSummary['months'] as $month)
+                                            <tr>
+                                                <td>{{ $month['label'] }}</td>
+                                                @foreach($savingsTypes as $key => $label)
+                                                    <td>Rp {{ number_format($month['types'][$key] ?? 0, 2, ',', '.') }}</td>
+                                                @endforeach
+                                                <td>Rp {{ number_format($month['total'], 2, ',', '.') }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @else
+                            <div class="muted">Belum ada transaksi simpanan.</div>
+                        @endif
+                    </div>
+                </details>
             </div>
-        </details>
+
+            <div class="loan-subcard">
+                <div class="loan-subheader">
+                    <div>
+                        <strong>Pemotongan Gaji Saya</strong>
+                        <div class="muted">Rekap potongan simpanan & angsuran Anda.</div>
+                    </div>
+                </div>
+                <div class="summary-grid">
+                    <div class="summary-item accent">
+                        <div class="label">Total Pemotongan</div>
+                        <div class="value">Rp {{ number_format($deductionSummary['total'] ?? 0, 2, ',', '.') }}</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="label">Simpanan</div>
+                        <div class="value">Rp {{ number_format($deductionSummary['savings_total'] ?? 0, 2, ',', '.') }}</div>
+                    </div>
+                    <div class="summary-item warning">
+                        <div class="label">Angsuran</div>
+                        <div class="value">Rp {{ number_format(($deductionSummary['principal_total'] ?? 0) + ($deductionSummary['fee_total'] ?? 0), 2, ',', '.') }}</div>
+                    </div>
+                </div>
+                <details class="loan-drop" style="margin-top: 12px;">
+                    <summary>
+                        <div class="loan-drop-title">
+                            <span>Rincian Bulanan Pemotongan</span>
+                        </div>
+                        <span class="loan-drop-meta">Klik untuk melihat detail</span>
+                    </summary>
+                    <div class="loan-drop-body">
+                        @if(!empty($deductionSummary['months']))
+                            <div class="loan-subcard">
+                                <table class="table table-compact table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Bulan</th>
+                                            @foreach($savingsTypes as $label)
+                                                <th>{{ $label }}</th>
+                                            @endforeach
+                                            <th>Angsuran Pokok</th>
+                                            <th>Angsuran Jasa</th>
+                                            <th>Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($deductionSummary['months'] as $month)
+                                            <tr>
+                                                <td>{{ $month['label'] }}</td>
+                                                @foreach($savingsTypes as $key => $label)
+                                                    <td>Rp {{ number_format($month['types'][$key] ?? 0, 2, ',', '.') }}</td>
+                                                @endforeach
+                                                <td>Rp {{ number_format($month['principal'] ?? 0, 2, ',', '.') }}</td>
+                                                <td>Rp {{ number_format($month['fee'] ?? 0, 2, ',', '.') }}</td>
+                                                <td>Rp {{ number_format($month['total'] ?? 0, 2, ',', '.') }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @else
+                            <div class="muted">Belum ada pemotongan gaji.</div>
+                        @endif
+                    </div>
+                </details>
+            </div>
+        </div>
     </div>
 
     <div class="card">

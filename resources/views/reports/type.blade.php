@@ -386,53 +386,114 @@
                             <h3>Neraca (Posisi Keuangan)</h3>
                         </div>
                     </div>
-                    <table class="table">
-                        <tbody>
-                            <tr>
-                                <td><strong>Aset</strong></td>
-                                <td></td>
-                            </tr>
-                            <tr>
-                                <td>Kas & Bank (estimasi)</td>
-                                <td>Rp {{ number_format($cashBalance, 2, ',', '.') }}</td>
-                            </tr>
-                            <tr>
-                                <td>Persediaan Barang</td>
-                                <td>Rp {{ number_format($inventoryValue, 2, ',', '.') }}</td>
-                            </tr>
-                            <tr>
-                                <td>Piutang Pinjaman</td>
-                                <td>Rp {{ number_format($loanReceivable, 2, ',', '.') }}</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Total Aset</strong></td>
-                                <td><strong>Rp {{ number_format($totalAssets, 2, ',', '.') }}</strong></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Liabilitas</strong></td>
-                                <td></td>
-                            </tr>
-                            <tr>
-                                <td>Simpanan Anggota</td>
-                                <td>Rp {{ number_format($totalLiabilities, 2, ',', '.') }}</td>
-                            </tr>
-                            <tr>
-                                <td><strong>Total Liabilitas</strong></td>
-                                <td><strong>Rp {{ number_format($totalLiabilities, 2, ',', '.') }}</strong></td>
-                            </tr>
-                            <tr>
-                                <td><strong>Ekuitas</strong></td>
-                                <td></td>
-                            </tr>
-                            @foreach($equityItems as $item)
-                                <tr>
-                                    <td>{{ $item['name'] }}</td>
-                                    <td>Rp {{ number_format($item['amount'], 2, ',', '.') }}</td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                    <p class="muted">Perhitungan neraca memakai data simpanan, pinjaman disetujui, persediaan, dan estimasi kas.</p>
+                    <div class="grid-two" style="align-items: start;">
+                        <div>
+                            <h4 style="margin-top: 0;">Aktiva</h4>
+                            <table class="table table-compact">
+                                <tbody>
+                                    <tr>
+                                        <td colspan="2"><strong>I. Aktiva Lancar</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Total Kas Saat Ini</td>
+                                        <td>Rp {{ number_format($cashBalance, 2, ',', '.') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Total Piutang Anggota</td>
+                                        <td>Rp {{ number_format($loanReceivable, 2, ',', '.') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Kas Dagang</td>
+                                        <td>Rp {{ number_format($tradeCash, 2, ',', '.') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Persediaan Dagang</td>
+                                        <td>Rp {{ number_format($inventoryValue, 2, ',', '.') }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Jumlah Aktiva Lancar</strong></td>
+                                        <td><strong>Rp {{ number_format($currentAssetsTotal, 2, ',', '.') }}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="2"><strong>II. Penyertaan</strong></td>
+                                    </tr>
+                                    @forelse($investmentItems as $item)
+                                        <tr>
+                                            <td>{{ $item['name'] }}</td>
+                                            <td>Rp {{ number_format($item['amount'], 2, ',', '.') }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="2" class="muted">Belum ada data penyertaan.</td>
+                                        </tr>
+                                    @endforelse
+                                    <tr>
+                                        <td><strong>Jumlah Penyertaan</strong></td>
+                                        <td><strong>Rp {{ number_format($investmentTotal, 2, ',', '.') }}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="2"><strong>III. Aktiva Tetap</strong></td>
+                                    </tr>
+                                    @forelse($inventoryItems as $item)
+                                        <tr>
+                                            <td>{{ $item['name'] }}</td>
+                                            <td>Rp {{ number_format($item['amount'], 2, ',', '.') }}</td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="2" class="muted">Belum ada data inventaris.</td>
+                                        </tr>
+                                    @endforelse
+                                    <tr>
+                                        <td><strong>Jumlah Aktiva Tetap</strong></td>
+                                        <td><strong>Rp {{ number_format($inventoryTotal, 2, ',', '.') }}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Jumlah Total Aktiva</strong></td>
+                                        <td><strong>Rp {{ number_format($totalAssets, 2, ',', '.') }}</strong></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div>
+                            <h4 style="margin-top: 0;">Pasiva</h4>
+                            <table class="table table-compact">
+                                <tbody>
+                                    <tr>
+                                        <td colspan="2"><strong>IV. Pasiva Lancar</strong></td>
+                                    </tr>
+                                    @foreach($pasivaLancarItems as $item)
+                                        <tr>
+                                            <td>{{ $item['name'] }}</td>
+                                            <td>Rp {{ number_format($item['amount'], 2, ',', '.') }}</td>
+                                        </tr>
+                                    @endforeach
+                                    <tr>
+                                        <td><strong>Jumlah Pasiva Lancar</strong></td>
+                                        <td><strong>Rp {{ number_format($pasivaLancarTotal, 2, ',', '.') }}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td colspan="2"><strong>V. Modal Sendiri</strong></td>
+                                    </tr>
+                                    @foreach($modalSendiriItems as $item)
+                                        <tr>
+                                            <td>{{ $item['name'] }}</td>
+                                            <td>Rp {{ number_format($item['amount'], 2, ',', '.') }}</td>
+                                        </tr>
+                                    @endforeach
+                                    <tr>
+                                        <td><strong>Jumlah Modal Sendiri</strong></td>
+                                        <td><strong>Rp {{ number_format($modalSendiriTotal, 2, ',', '.') }}</strong></td>
+                                    </tr>
+                                    <tr>
+                                        <td><strong>Jumlah Total Pasiva</strong></td>
+                                        <td><strong>Rp {{ number_format($pasivaTotal, 2, ',', '.') }}</strong></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <p class="muted">Aktiva dihitung dari saldo kas, piutang anggota, kas dagang, persediaan, penyertaan, dan inventaris.</p>
                 </div>
             @elseif($type === 'ekuitas')
                 <div class="card">

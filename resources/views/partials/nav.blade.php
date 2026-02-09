@@ -10,13 +10,28 @@
     $openFinance = request()->routeIs('saldo.*')
         || request()->routeIs('savings.*')
         || request()->routeIs('deductions.*')
+        || request()->routeIs('anggota.keuangan')
         || request()->routeIs('anggota.loans.*')
         || request()->routeIs('sekretaris.loans.*')
         || request()->routeIs('bendahara.loans.*')
         || request()->routeIs('ketua.loans.*');
     $openManagement = request()->routeIs('users.*') || request()->routeIs('members.*') || request()->routeIs('invites.*');
-    $openStore = request()->routeIs('products.*') || request()->routeIs('sales.*');
+    $openStore = request()->routeIs('products.*') || request()->routeIs('sales.*') || request()->routeIs('mart.balance.*');
     $openReports = request()->routeIs('reports.type') || request()->routeIs('reports.*');
+
+    $pendingSecretaryLoans = $canSecretary ? DB::table('loans')->where('status', 'submitted')->count() : 0;
+    $pendingCashEntries = $canSecretary ? DB::table('cash_entries')->where('status', 'pending')->count() : 0;
+    $pendingTreasurerLoans = $canTreasurer ? DB::table('loans')->where('status', 'reviewed')->count() : 0;
+    $pendingChairmanLoans = $canChairman ? DB::table('loans')->where('status', 'approved_treasurer')->count() : 0;
+    $pendingDeductions = $canOfficeTreasurer ? DB::table('deduction_logs')->where('status', 'pending')->count() : 0;
+    $pendingSettlements = $canTreasurer
+        ? DB::table('loan_installment_payments')->where('is_settlement', 1)->where('status', 'pending')->count()
+        : 0;
+    $pendingDisbursements = $canTreasurer
+        ? DB::table('loans')->where('status', 'approved_chairman')->whereNull('transfer_evidence_path')->count()
+        : 0;
+
+    $hasApprovalMenu = $canSecretary || $canTreasurer || $canChairman || $canOfficeTreasurer;
 
     $reportTypes = [
         'shu' => 'SHU',
@@ -31,65 +46,118 @@
         <span>Dashboard</span>
     </a>
 
-    <details class="nav-group" {{ $openFinance ? 'open' : '' }}>
-        <summary class="nav-group-title">
+
+    @if($role === 'anggota')
+        <a href="{{ route('anggota.loans.create') }}" class="{{ request()->routeIs('anggota.loans.create') ? 'active' : '' }}">
+            @include('partials.icon', ['name' => 'plus'])
+            <span>Ajukan Peminjaman</span>
+        </a>
+        <a href="{{ route('anggota.loans.index') }}" class="{{ request()->routeIs('anggota.loans.index') ? 'active' : '' }}">
+            @include('partials.icon', ['name' => 'file'])
+            <span>Pinjaman Saya</span>
+        </a>
+        <a href="{{ route('anggota.loans.payments') }}" class="{{ request()->routeIs('anggota.loans.payments*') ? 'active' : '' }}">
             @include('partials.icon', ['name' => 'wallet'])
-            <span>Keuangan</span>
-        </summary>
-        <div class="nav-sub">
-            <a href="{{ route('saldo.index') }}" class="{{ request()->routeIs('saldo.*') ? 'active' : '' }}">
-                @include('partials.icon', ['name' => 'wallet'])
-                <span>Saldo Koperasi</span>
-            </a>
-            <a href="{{ route('savings.index') }}" class="{{ request()->routeIs('savings.*') ? 'active' : '' }}">
-                @include('partials.icon', ['name' => 'coins'])
-                <span>Rekap Simpanan</span>
-            </a>
-            <a href="{{ route('deductions.index') }}" class="{{ request()->routeIs('deductions.*') ? 'active' : '' }}">
+            <span>Pembayaran Angsuran</span>
+        </a>
+        <a href="{{ route('anggota.keuangan') }}" class="{{ request()->routeIs('anggota.keuangan') ? 'active' : '' }}">
+            @include('partials.icon', ['name' => 'coins'])
+            <span>Rekap Simpanan & Pemotongan</span>
+        </a>
+    @endif
+
+    @if($hasApprovalMenu)
+        <div class="nav-section-title">Persetujuan</div>
+        @if($canSecretary)
+            <a href="{{ route('sekretaris.loans.index') }}" class="nav-approval {{ $pendingSecretaryLoans > 0 ? 'nav-state--pending' : 'nav-state--ok' }} {{ request()->routeIs('sekretaris.loans.*') ? 'active' : '' }}">
                 @include('partials.icon', ['name' => 'clipboard'])
-                <span>{{ $canOfficeTreasurer && !$canTreasurer ? 'Verifikasi Pemotongan' : 'Rekap Pemotongan' }}</span>
-            </a>
-            @if($canMemberLoan || $canSecretary || $canTreasurer || $canChairman)
-                <div class="nav-separator"></div>
-                @if($canMemberLoan)
-                    <a href="{{ route('anggota.loans.index') }}" class="{{ request()->routeIs('anggota.loans.index') ? 'active' : '' }}">
-                        @include('partials.icon', ['name' => 'file'])
-                        <span>Peminjaman Saya</span>
-                    </a>
-                    <a href="{{ route('anggota.loans.create') }}" class="{{ request()->routeIs('anggota.loans.create') ? 'active' : '' }}">
-                        @include('partials.icon', ['name' => 'plus'])
-                        <span>Ajukan Peminjaman</span>
-                    </a>
-                    <a href="{{ route('anggota.loans.payments') }}" class="{{ request()->routeIs('anggota.loans.payments*') ? 'active' : '' }}">
-                        @include('partials.icon', ['name' => 'wallet'])
-                        <span>Pembayaran Angsuran</span>
-                    </a>
+                <span>Review Sekretaris</span>
+                @if($pendingSecretaryLoans > 0)
+                    <span class="nav-badge">{{ $pendingSecretaryLoans }}</span>
                 @endif
-                @if($canSecretary)
-                    <a href="{{ route('sekretaris.loans.index') }}" class="{{ request()->routeIs('sekretaris.loans.*') ? 'active' : '' }}">
+            </a>
+            <a href="{{ route('saldo.index') }}" class="nav-approval {{ $pendingCashEntries > 0 ? 'nav-state--pending' : 'nav-state--ok' }} {{ request()->routeIs('saldo.*') ? 'active' : '' }}">
+                @include('partials.icon', ['name' => 'wallet'])
+                <span>Verifikasi Kas</span>
+                @if($pendingCashEntries > 0)
+                    <span class="nav-badge">{{ $pendingCashEntries }}</span>
+                @endif
+            </a>
+        @endif
+        @if($canTreasurer)
+            <a href="{{ route('bendahara.loans.index') }}" class="nav-approval {{ $pendingTreasurerLoans > 0 ? 'nav-state--pending' : 'nav-state--ok' }} {{ request()->routeIs('bendahara.loans.index') ? 'active' : '' }}">
+                @include('partials.icon', ['name' => 'check'])
+                <span>Persetujuan Bendahara</span>
+                @if($pendingTreasurerLoans > 0)
+                    <span class="nav-badge">{{ $pendingTreasurerLoans }}</span>
+                @endif
+            </a>
+            <a href="{{ route('bendahara.loans.disbursement') }}" class="nav-approval {{ $pendingDisbursements > 0 ? 'nav-state--pending' : 'nav-state--ok' }} {{ request()->routeIs('bendahara.loans.disbursement*') ? 'active' : '' }}">
+                @include('partials.icon', ['name' => 'wallet'])
+                <span>Pencairan Pinjaman</span>
+                @if($pendingDisbursements > 0)
+                    <span class="nav-badge">{{ $pendingDisbursements }}</span>
+                @endif
+            </a>
+            <a href="{{ route('bendahara.loans.payments') }}" class="nav-approval {{ $pendingSettlements > 0 ? 'nav-state--pending' : 'nav-state--ok' }} {{ request()->routeIs('bendahara.loans.payments*') ? 'active' : '' }}">
+                @include('partials.icon', ['name' => 'users'])
+                <span>Validasi Pelunasan</span>
+                @if($pendingSettlements > 0)
+                    <span class="nav-badge">{{ $pendingSettlements }}</span>
+                @endif
+            </a>
+        @endif
+        @if($canChairman)
+            <a href="{{ route('ketua.loans.index') }}" class="nav-approval {{ $pendingChairmanLoans > 0 ? 'nav-state--pending' : 'nav-state--ok' }} {{ request()->routeIs('ketua.loans.*') ? 'active' : '' }}">
+                @include('partials.icon', ['name' => 'star'])
+                <span>Persetujuan Ketua</span>
+                @if($pendingChairmanLoans > 0)
+                    <span class="nav-badge">{{ $pendingChairmanLoans }}</span>
+                @endif
+            </a>
+        @endif
+        @if($canOfficeTreasurer)
+            <a href="{{ route('deductions.index') }}" class="nav-approval {{ $pendingDeductions > 0 ? 'nav-state--pending' : 'nav-state--ok' }} {{ request()->routeIs('deductions.*') ? 'active' : '' }}">
+                @include('partials.icon', ['name' => 'clipboard'])
+                <span>Verifikasi Pemotongan</span>
+                @if($pendingDeductions > 0)
+                    <span class="nav-badge">{{ $pendingDeductions }}</span>
+                @endif
+            </a>
+        @endif
+    @endif
+
+    @if($role !== 'anggota')
+        <details class="nav-group" {{ $openFinance ? 'open' : '' }}>
+            <summary class="nav-group-title">
+                @include('partials.icon', ['name' => 'wallet'])
+                <span>Keuangan</span>
+            </summary>
+            <div class="nav-sub">
+                <a href="{{ route('saldo.index') }}" class="{{ request()->routeIs('saldo.*') ? 'active' : '' }}">
+                    @include('partials.icon', ['name' => 'wallet'])
+                    <span>Saldo Koperasi</span>
+                </a>
+                <a href="{{ route('savings.index') }}" class="{{ request()->routeIs('savings.*') ? 'active' : '' }}">
+                    @include('partials.icon', ['name' => 'coins'])
+                    <span>Rekap Simpanan</span>
+                </a>
+                @if(!($canOfficeTreasurer && !$canTreasurer))
+                    <a href="{{ route('deductions.index') }}" class="{{ request()->routeIs('deductions.*') ? 'active' : '' }}">
                         @include('partials.icon', ['name' => 'clipboard'])
-                        <span>Review Sekretaris</span>
+                        <span>Rekap Pemotongan</span>
                     </a>
                 @endif
                 @if($canTreasurer)
-                    <a href="{{ route('bendahara.loans.index') }}" class="{{ request()->routeIs('bendahara.loans.*') ? 'active' : '' }}">
-                        @include('partials.icon', ['name' => 'check'])
-                        <span>Persetujuan Bendahara</span>
-                    </a>
+                    <div class="nav-separator"></div>
                     <a href="{{ route('bendahara.loans.payments') }}" class="{{ request()->routeIs('bendahara.loans.payments*') ? 'active' : '' }}">
                         @include('partials.icon', ['name' => 'users'])
                         <span>Rekap Peminjaman</span>
                     </a>
                 @endif
-                @if($canChairman)
-                    <a href="{{ route('ketua.loans.index') }}" class="{{ request()->routeIs('ketua.loans.*') ? 'active' : '' }}">
-                        @include('partials.icon', ['name' => 'star'])
-                        <span>Persetujuan Ketua</span>
-                    </a>
-                @endif
-            @endif
-        </div>
-    </details>
+            </div>
+        </details>
+    @endif
 
     @if(in_array($role, ['bendahara', 'superadmin']))
         <details class="nav-group" {{ $openReports ? 'open' : '' }}>
@@ -144,6 +212,10 @@
                 <span>Koperasi Mart</span>
             </summary>
             <div class="nav-sub">
+                <a href="{{ route('mart.balance.index') }}" class="{{ request()->routeIs('mart.balance.*') ? 'active' : '' }}">
+                    @include('partials.icon', ['name' => 'wallet'])
+                    <span>Saldo Koperasi Mart</span>
+                </a>
                 <a href="{{ route('products.index') }}" class="{{ request()->routeIs('products.*') ? 'active' : '' }}">
                     @include('partials.icon', ['name' => 'box'])
                     <span>Produk Koperasi</span>

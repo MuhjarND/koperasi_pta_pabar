@@ -81,6 +81,25 @@
             <path d="M3 3v6h6"></path>
             <path d="M12 7v5l3 2"></path>
         </svg>
+    @elseif($name === 'barcode')
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 6v12"></path>
+            <path d="M7 6v12"></path>
+            <path d="M10 6v12"></path>
+            <path d="M13 6v12"></path>
+            <path d="M16 6v12"></path>
+            <path d="M19 6v12"></path>
+        </svg>
+    @elseif($name === 'qr')
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+            <path d="M14 14h3v3h-3z"></path>
+            <path d="M20 14v2"></path>
+            <path d="M14 20h2"></path>
+            <path d="M18 18h3v3h-3z"></path>
+        </svg>
     @elseif($name === 'chart')
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
             <path d="M3 19h18"></path>

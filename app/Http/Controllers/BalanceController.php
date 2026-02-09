@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\FonnteService;
 
 class BalanceController extends Controller
 {
@@ -22,7 +23,7 @@ class BalanceController extends Controller
             ->value('total');
         $cashIn = DB::table('cash_entries')
             ->where('direction', 'in')
-            ->whereIn('category', ['potongan', 'simpanan', 'pelunasan'])
+            ->whereIn('category', ['potongan', 'simpanan', 'pelunasan', 'saldo_awal'])
             ->where(function ($query) {
                 $query->whereNull('status')
                     ->orWhere('status', 'approved');
@@ -150,8 +151,10 @@ class BalanceController extends Controller
         $description = $payload['description'] ?? null;
         $evidencePath = null;
 
-        if ($payload['direction'] === 'out') {
+        if (!empty($payload['category'])) {
             $category = $payload['category'];
+        } elseif ($payload['direction'] === 'in') {
+            $category = 'saldo_awal';
         }
 
         if ($request->hasFile('evidence')) {
@@ -178,6 +181,23 @@ class BalanceController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        $amountLabel = number_format((float) $payload['amount'], 2, ',', '.');
+        $directionLabel = $payload['direction'] === 'in' ? 'Pemasukan' : 'Pengeluaran';
+        $descLabel = $description ?: ($payload['category'] ?? 'Transaksi');
+        $sekretarisLink = route('saldo.index');
+        $notifier = new FonnteService();
+        $notifier->notifyRole(
+            'sekretaris',
+            $notifier->formatMessage([
+                ($directionLabel === 'Pemasukan' ? '💰' : '📤') . " {$directionLabel} baru menunggu verifikasi.",
+                "Kategori: " . ($category ?? '-'),
+                "Uraian: {$descLabel}",
+                "Nominal: Rp {$amountLabel}",
+                "Tanggal: {$payload['entry_date']}",
+                "Tindak lanjut: {$sekretarisLink}",
+            ], '🤝')
+        );
 
         $message = $payload['direction'] === 'in'
             ? 'Pemasukan berhasil dikirim dan menunggu verifikasi sekretaris.'
@@ -215,6 +235,23 @@ class BalanceController extends Controller
                 'updated_at' => now(),
             ]);
 
+        $recipientName = null;
+        if (!empty($entry->created_by)) {
+            $recipientName = DB::table('users')->where('id', $entry->created_by)->value('name');
+        }
+        $saldoLink = route('saldo.index');
+        $notifier = new FonnteService();
+        $notifier->notifyUser(
+            $entry->created_by ?? null,
+            $notifier->formatMessage([
+                "✅ Transaksi telah diverifikasi sekretaris.",
+                "Uraian: " . ($entry->description ?: 'Pemasukan/Pengeluaran'),
+                "Nominal: Rp " . number_format((float) $entry->amount, 2, ',', '.'),
+                "Tanggal: {$entry->entry_date}",
+                "Detail: {$saldoLink}",
+            ], '🙏', $recipientName)
+        );
+
         return redirect()
             ->route('saldo.index')
             ->with('success', 'Pemasukan/pengeluaran berhasil diverifikasi.');
@@ -240,7 +277,7 @@ class BalanceController extends Controller
 
         $openingOther = DB::table('cash_entries')
             ->where('direction', 'in')
-            ->whereIn('category', ['potongan', 'simpanan', 'pelunasan'])
+            ->whereIn('category', ['potongan', 'simpanan', 'pelunasan', 'saldo_awal'])
             ->where(function ($query) {
                 $query->whereNull('status')
                     ->orWhere('status', 'approved');
@@ -323,7 +360,7 @@ class BalanceController extends Controller
                 $query->where('direction', 'out')
                     ->orWhere(function ($inner) {
                         $inner->where('direction', 'in')
-                            ->whereIn('category', ['potongan', 'simpanan', 'pelunasan']);
+                            ->whereIn('category', ['potongan', 'simpanan', 'pelunasan', 'saldo_awal']);
                     });
             })
             ->orderBy('entry_date')

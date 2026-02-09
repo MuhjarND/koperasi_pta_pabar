@@ -4,6 +4,58 @@
 @section('subtitle', 'Rekap simpanan per anggota dengan detail bulanan.')
 
 @section('content')
+    @if($role === 'anggota')
+        @php
+            $memberSummary = $memberSummaries[0] ?? null;
+            $totalMonths = $memberSummary ? count($memberSummary['months']) : 0;
+        @endphp
+        <div class="summary-grid" style="margin-bottom: 16px;">
+            <div class="summary-item accent">
+                <div class="label">Total Simpanan</div>
+                <div class="value">Rp {{ number_format($memberSummary['total_amount'] ?? 0, 2, ',', '.') }}</div>
+            </div>
+            <div class="summary-item">
+                <div class="label">Simpanan Pokok</div>
+                <div class="value">Rp {{ number_format($memberTypeTotals['pokok'] ?? 0, 2, ',', '.') }}</div>
+            </div>
+            <div class="summary-item">
+                <div class="label">Simpanan Wajib</div>
+                <div class="value">Rp {{ number_format($memberTypeTotals['wajib'] ?? 0, 2, ',', '.') }}</div>
+            </div>
+            <div class="summary-item">
+                <div class="label">Simpanan Sukarela</div>
+                <div class="value">Rp {{ number_format($memberTypeTotals['sukarela'] ?? 0, 2, ',', '.') }}</div>
+            </div>
+            <div class="summary-item warning">
+                <div class="label">Bulan Tercatat</div>
+                <div class="value">{{ $totalMonths }} bulan</div>
+            </div>
+        </div>
+    @elseif(!in_array($role, ['bendahara_kantor']))
+        <div class="summary-grid" style="margin-bottom: 16px;">
+            <div class="summary-item accent">
+                <div class="label">Total Simpanan</div>
+                <div class="value">Rp {{ number_format($summaryTotals['total'] ?? 0, 2, ',', '.') }}</div>
+            </div>
+            <div class="summary-item">
+                <div class="label">Simpanan Pokok</div>
+                <div class="value">Rp {{ number_format($summaryTotals['types']['pokok'] ?? 0, 2, ',', '.') }}</div>
+            </div>
+            <div class="summary-item">
+                <div class="label">Simpanan Wajib</div>
+                <div class="value">Rp {{ number_format($summaryTotals['types']['wajib'] ?? 0, 2, ',', '.') }}</div>
+            </div>
+            <div class="summary-item">
+                <div class="label">Simpanan Sukarela</div>
+                <div class="value">Rp {{ number_format($summaryTotals['types']['sukarela'] ?? 0, 2, ',', '.') }}</div>
+            </div>
+            <div class="summary-item warning">
+                <div class="label">Jumlah Anggota</div>
+                <div class="value">{{ $summaryTotals['members'] ?? 0 }} anggota</div>
+            </div>
+        </div>
+    @endif
+
     <div class="card">
         <div class="card-header">
             <div class="card-title">
@@ -16,6 +68,11 @@
                     <button class="btn btn-ghost" type="button" data-modal-open="savings-post-modal" @if(($pendingSavings['count'] ?? 0) < 1) disabled @endif>
                         Masukkan ke Arus Kas
                     </button>
+                    <button class="btn btn-ghost" type="button" data-modal-open="savings-rekap-modal">Preview Rekap PDF</button>
+                </div>
+            @elseif(!in_array($role, ['bendahara_kantor', 'anggota']))
+                <div class="action-row">
+                    <button class="btn btn-ghost" type="button" data-modal-open="savings-rekap-modal">Preview Rekap PDF</button>
                 </div>
             @endif
         </div>
@@ -489,6 +546,83 @@
                         closeEdit();
                     }
                 });
+            });
+        </script>
+    @endif
+
+    @if(!in_array($role, ['bendahara_kantor', 'anggota']))
+        <dialog class="modal" id="savings-rekap-modal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <div>
+                        <h3>Preview Rekap Simpanan (PDF)</h3>
+                        <p class="muted">Pratinjau rekap simpanan dalam format PDF.</p>
+                    </div>
+                    <button class="btn btn-ghost" type="button" data-modal-close-rekap>Keluar</button>
+                </div>
+                <div class="action-row" style="margin-bottom: 12px;">
+                    <label class="muted" style="font-size: 13px;">Filter Bulan</label>
+                    <select id="rekap-month-filter">
+                        <option value="all">Semua</option>
+                        @foreach($monthNames as $number => $label)
+                            <option value="{{ $number }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <iframe class="pdf-preview" src="{{ route('savings.rekap.pdf') }}" title="Rekap Simpanan PDF" data-rekap-src="{{ route('savings.rekap.pdf') }}"></iframe>
+            </div>
+        </dialog>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const modal = document.getElementById('savings-rekap-modal');
+                const monthFilter = document.getElementById('rekap-month-filter');
+                const iframe = modal ? modal.querySelector('.pdf-preview') : null;
+                const openButtons = document.querySelectorAll('[data-modal-open="savings-rekap-modal"]');
+                const closeButtons = modal ? modal.querySelectorAll('[data-modal-close-rekap]') : [];
+
+                const openModal = () => {
+                    if (!modal) return;
+                    if (typeof modal.showModal === 'function') {
+                        modal.showModal();
+                    } else {
+                        modal.setAttribute('open', 'open');
+                    }
+                };
+
+                const closeModal = () => {
+                    if (!modal) return;
+                    if (typeof modal.close === 'function') {
+                        modal.close();
+                    } else {
+                        modal.removeAttribute('open');
+                    }
+                };
+
+                openButtons.forEach((btn) => {
+                    btn.addEventListener('click', openModal);
+                });
+
+                closeButtons.forEach((btn) => {
+                    btn.addEventListener('click', closeModal);
+                });
+
+                if (monthFilter && iframe) {
+                    const baseUrl = iframe.getAttribute('data-rekap-src') || '';
+                    monthFilter.addEventListener('change', () => {
+                        const month = monthFilter.value || 'all';
+                        const url = month === 'all' ? baseUrl : (baseUrl + '?month=' + month);
+                        iframe.src = url;
+                    });
+                }
+
+                if (modal) {
+                    modal.addEventListener('click', (event) => {
+                        if (event.target === modal) {
+                            closeModal();
+                        }
+                    });
+                }
             });
         </script>
     @endif

@@ -14,7 +14,7 @@ class UserSeeder extends Seeder
      */
     public function run()
     {
-        $defaultPassword = 'koperasi123';
+        $defaultPassword = 'password';
         $timestamp = now();
 
         $users = [

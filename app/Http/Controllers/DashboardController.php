@@ -252,6 +252,92 @@ class DashboardController extends Controller
             'total_amount' => $savingsTotal,
         ];
 
+        $deductionMonths = [];
+        $deductionTotals = [
+            'savings' => 0,
+            'principal' => 0,
+            'fee' => 0,
+            'total' => 0,
+            'types' => array_fill_keys(array_keys($savingsTypes), 0),
+        ];
+
+        $deductionSavingsRows = DB::table('savings_transactions')
+            ->select('type', 'amount', 'created_at')
+            ->where('user_id', $userId)
+            ->where('note', 'Potong Gaji')
+            ->orderBy('created_at')
+            ->get();
+
+        foreach ($deductionSavingsRows as $row) {
+            $monthKey = date('Y-m', strtotime($row->created_at));
+            $monthNumber = (int) date('n', strtotime($row->created_at));
+            $yearNumber = (int) date('Y', strtotime($row->created_at));
+            $monthLabel = ($monthNames[$monthNumber] ?? $monthNumber) . ' ' . $yearNumber;
+
+            if (!isset($deductionMonths[$monthKey])) {
+                $deductionMonths[$monthKey] = [
+                    'label' => $monthLabel,
+                    'types' => array_fill_keys(array_keys($savingsTypes), 0),
+                    'principal' => 0,
+                    'fee' => 0,
+                    'total' => 0,
+                ];
+            }
+
+            $deductionMonths[$monthKey]['types'][$row->type] += (float) $row->amount;
+            $deductionMonths[$monthKey]['total'] += (float) $row->amount;
+            $deductionTotals['savings'] += (float) $row->amount;
+            $deductionTotals['total'] += (float) $row->amount;
+            if (isset($deductionTotals['types'][$row->type])) {
+                $deductionTotals['types'][$row->type] += (float) $row->amount;
+            }
+        }
+
+        $deductionLoanRows = DB::table('loan_installment_payments')
+            ->join('loans', 'loan_installment_payments.loan_id', '=', 'loans.id')
+            ->select('loan_installment_payments.amount_principal', 'loan_installment_payments.amount_fee', 'loan_installment_payments.paid_at')
+            ->where('loans.user_id', $userId)
+            ->where('loan_installment_payments.note', 'Potong Gaji')
+            ->where('loan_installment_payments.status', 'approved')
+            ->where('loan_installment_payments.installment_no', '>', 0)
+            ->orderBy('loan_installment_payments.paid_at')
+            ->get();
+
+        foreach ($deductionLoanRows as $row) {
+            $monthKey = date('Y-m', strtotime($row->paid_at));
+            $monthNumber = (int) date('n', strtotime($row->paid_at));
+            $yearNumber = (int) date('Y', strtotime($row->paid_at));
+            $monthLabel = ($monthNames[$monthNumber] ?? $monthNumber) . ' ' . $yearNumber;
+
+            if (!isset($deductionMonths[$monthKey])) {
+                $deductionMonths[$monthKey] = [
+                    'label' => $monthLabel,
+                    'types' => array_fill_keys(array_keys($savingsTypes), 0),
+                    'principal' => 0,
+                    'fee' => 0,
+                    'total' => 0,
+                ];
+            }
+
+            $deductionMonths[$monthKey]['principal'] += (float) $row->amount_principal;
+            $deductionMonths[$monthKey]['fee'] += (float) $row->amount_fee;
+            $deductionMonths[$monthKey]['total'] += (float) $row->amount_principal + (float) $row->amount_fee;
+            $deductionTotals['principal'] += (float) $row->amount_principal;
+            $deductionTotals['fee'] += (float) $row->amount_fee;
+            $deductionTotals['total'] += (float) $row->amount_principal + (float) $row->amount_fee;
+        }
+
+        ksort($deductionMonths);
+
+        $deductionSummary = [
+            'months' => array_values($deductionMonths),
+            'total' => $deductionTotals['total'],
+            'savings_total' => $deductionTotals['savings'],
+            'principal_total' => $deductionTotals['principal'],
+            'fee_total' => $deductionTotals['fee'],
+            'types_total' => $deductionTotals['types'],
+        ];
+
         return view('dashboard.anggota', [
             'balance' => $balance,
             'totalLoans' => $totalLoans,
@@ -261,6 +347,165 @@ class DashboardController extends Controller
             'statusLabels' => config('koperasi.status_labels'),
             'savingsSummary' => $savingsSummary,
             'savingsTypes' => $savingsTypes,
+            'deductionSummary' => $deductionSummary,
+        ]);
+    }
+
+    public function anggotaKeuangan(Request $request)
+    {
+        $userId = $request->session()->get('auth.id');
+        $savingsTypes = config('koperasi.savings_types');
+        $monthNames = [
+            1 => 'Januari',
+            2 => 'Februari',
+            3 => 'Maret',
+            4 => 'April',
+            5 => 'Mei',
+            6 => 'Juni',
+            7 => 'Juli',
+            8 => 'Agustus',
+            9 => 'September',
+            10 => 'Oktober',
+            11 => 'November',
+            12 => 'Desember',
+        ];
+
+        $savingsRows = DB::table('savings_transactions')
+            ->select('type', 'amount', 'created_at')
+            ->where('user_id', $userId)
+            ->orderBy('created_at')
+            ->get();
+
+        $savingsMonths = [];
+        $savingsTotal = 0;
+        $typeTotals = array_fill_keys(array_keys($savingsTypes), 0);
+
+        foreach ($savingsRows as $row) {
+            $monthKey = date('Y-m', strtotime($row->created_at));
+            $monthNumber = (int) date('n', strtotime($row->created_at));
+            $yearNumber = (int) date('Y', strtotime($row->created_at));
+            $monthLabel = ($monthNames[$monthNumber] ?? $monthNumber) . ' ' . $yearNumber;
+
+            if (!isset($savingsMonths[$monthKey])) {
+                $savingsMonths[$monthKey] = [
+                    'label' => $monthLabel,
+                    'types' => array_fill_keys(array_keys($savingsTypes), 0),
+                    'total' => 0,
+                ];
+            }
+
+            $savingsMonths[$monthKey]['types'][$row->type] += (float) $row->amount;
+            $savingsMonths[$monthKey]['total'] += (float) $row->amount;
+            $savingsTotal += (float) $row->amount;
+
+            if (isset($typeTotals[$row->type])) {
+                $typeTotals[$row->type] += (float) $row->amount;
+            }
+        }
+
+        $memberProfile = DB::table('users')
+            ->select('name', 'member_no')
+            ->where('id', $userId)
+            ->first();
+
+        $savingsSummary = [
+            'name' => $memberProfile->name ?? 'Anggota',
+            'member_no' => $memberProfile->member_no ?? null,
+            'months' => array_values($savingsMonths),
+            'total_amount' => $savingsTotal,
+        ];
+
+        $deductionMonths = [];
+        $deductionTotals = [
+            'savings' => 0,
+            'principal' => 0,
+            'fee' => 0,
+            'total' => 0,
+            'types' => array_fill_keys(array_keys($savingsTypes), 0),
+        ];
+
+        $deductionSavingsRows = DB::table('savings_transactions')
+            ->select('type', 'amount', 'created_at')
+            ->where('user_id', $userId)
+            ->where('note', 'Potong Gaji')
+            ->orderBy('created_at')
+            ->get();
+
+        foreach ($deductionSavingsRows as $row) {
+            $monthKey = date('Y-m', strtotime($row->created_at));
+            $monthNumber = (int) date('n', strtotime($row->created_at));
+            $yearNumber = (int) date('Y', strtotime($row->created_at));
+            $monthLabel = ($monthNames[$monthNumber] ?? $monthNumber) . ' ' . $yearNumber;
+
+            if (!isset($deductionMonths[$monthKey])) {
+                $deductionMonths[$monthKey] = [
+                    'label' => $monthLabel,
+                    'types' => array_fill_keys(array_keys($savingsTypes), 0),
+                    'principal' => 0,
+                    'fee' => 0,
+                    'total' => 0,
+                ];
+            }
+
+            $deductionMonths[$monthKey]['types'][$row->type] += (float) $row->amount;
+            $deductionMonths[$monthKey]['total'] += (float) $row->amount;
+            $deductionTotals['savings'] += (float) $row->amount;
+            $deductionTotals['total'] += (float) $row->amount;
+            if (isset($deductionTotals['types'][$row->type])) {
+                $deductionTotals['types'][$row->type] += (float) $row->amount;
+            }
+        }
+
+        $deductionLoanRows = DB::table('loan_installment_payments')
+            ->join('loans', 'loan_installment_payments.loan_id', '=', 'loans.id')
+            ->select('loan_installment_payments.amount_principal', 'loan_installment_payments.amount_fee', 'loan_installment_payments.paid_at')
+            ->where('loans.user_id', $userId)
+            ->where('loan_installment_payments.note', 'Potong Gaji')
+            ->where('loan_installment_payments.status', 'approved')
+            ->where('loan_installment_payments.installment_no', '>', 0)
+            ->orderBy('loan_installment_payments.paid_at')
+            ->get();
+
+        foreach ($deductionLoanRows as $row) {
+            $monthKey = date('Y-m', strtotime($row->paid_at));
+            $monthNumber = (int) date('n', strtotime($row->paid_at));
+            $yearNumber = (int) date('Y', strtotime($row->paid_at));
+            $monthLabel = ($monthNames[$monthNumber] ?? $monthNumber) . ' ' . $yearNumber;
+
+            if (!isset($deductionMonths[$monthKey])) {
+                $deductionMonths[$monthKey] = [
+                    'label' => $monthLabel,
+                    'types' => array_fill_keys(array_keys($savingsTypes), 0),
+                    'principal' => 0,
+                    'fee' => 0,
+                    'total' => 0,
+                ];
+            }
+
+            $deductionMonths[$monthKey]['principal'] += (float) $row->amount_principal;
+            $deductionMonths[$monthKey]['fee'] += (float) $row->amount_fee;
+            $deductionMonths[$monthKey]['total'] += (float) $row->amount_principal + (float) $row->amount_fee;
+            $deductionTotals['principal'] += (float) $row->amount_principal;
+            $deductionTotals['fee'] += (float) $row->amount_fee;
+            $deductionTotals['total'] += (float) $row->amount_principal + (float) $row->amount_fee;
+        }
+
+        ksort($deductionMonths);
+
+        $deductionSummary = [
+            'months' => array_values($deductionMonths),
+            'total' => $deductionTotals['total'],
+            'savings_total' => $deductionTotals['savings'],
+            'principal_total' => $deductionTotals['principal'],
+            'fee_total' => $deductionTotals['fee'],
+            'types_total' => $deductionTotals['types'],
+        ];
+
+        return view('anggota.keuangan', [
+            'savingsSummary' => $savingsSummary,
+            'savingsTypes' => $savingsTypes,
+            'savingsTypeTotals' => $typeTotals,
+            'deductionSummary' => $deductionSummary,
         ]);
     }
 
@@ -278,7 +523,7 @@ class DashboardController extends Controller
             ->value('total');
         $cashIn = DB::table('cash_entries')
             ->where('direction', 'in')
-            ->whereIn('category', ['potongan', 'simpanan', 'pelunasan'])
+            ->whereIn('category', ['potongan', 'simpanan', 'pelunasan', 'saldo_awal'])
             ->where(function ($query) {
                 $query->whereNull('status')
                     ->orWhere('status', 'approved');

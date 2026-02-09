@@ -2,31 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use Barryvdh\DomPDF\Facade as PDF;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Services\FonnteService;
 
 class DeductionController extends Controller
 {
     public function index(Request $request)
     {
         $role = $request->session()->get('auth.role');
+        $userId = $request->session()->get('auth.id');
+        $isMember = $role === 'anggota';
         $canVerify = in_array($role, ['bendahara_kantor', 'superadmin']);
         $types = config('koperasi.savings_types');
-        $monthNames = [
-            1 => 'Januari',
-            2 => 'Februari',
-            3 => 'Maret',
-            4 => 'April',
-            5 => 'Mei',
-            6 => 'Juni',
-            7 => 'Juli',
-            8 => 'Agustus',
-            9 => 'September',
-            10 => 'Oktober',
-            11 => 'November',
-            12 => 'Desember',
-        ];
+        $monthNames = $this->monthNames();
 
         $deductions = DB::table('member_deductions')
             ->join('users', 'member_deductions.user_id', '=', 'users.id')
@@ -39,6 +30,9 @@ class DeductionController extends Controller
                 'member_deductions.amount_sukarela',
                 'member_deductions.is_active'
             )
+            ->when($isMember, function ($query) use ($userId) {
+                $query->where('users.id', $userId);
+            })
             ->orderBy('users.name')
             ->get();
 
@@ -56,7 +50,7 @@ class DeductionController extends Controller
             ];
         }
 
-        $memberIds = $deductions->pluck('id')->all();
+        $memberIds = $isMember ? [$userId] : $deductions->pluck('id')->all();
         $members = [];
 
         $savingsRows = DB::table('savings_transactions')
@@ -152,53 +146,57 @@ class DeductionController extends Controller
             $members[$id]['remaining_installments'] = $remainingMap[$id] ?? 0;
         }
 
-        $membersList = DB::table('users')
-            ->select('id', 'name', 'member_no')
-            ->where('role', 'anggota')
-            ->orderBy('name')
-            ->get();
-
-        $memberListIds = $membersList->pluck('id')->all();
-        $serviceRate = (float) config('koperasi.service_fee_rate', 0);
-        $loanInstallmentRows = DB::table('loans')
-            ->leftJoin('loan_installment_payments', function ($join) {
-                $join->on('loans.id', '=', 'loan_installment_payments.loan_id')
-                    ->where('loan_installment_payments.status', '=', 'approved')
-                    ->where('loan_installment_payments.installment_no', '>', 0);
-            })
-            ->select(
-                'loans.id',
-                'loans.user_id',
-                'loans.amount',
-                'loans.term_months',
-                DB::raw('count(loan_installment_payments.id) as paid_count')
-            )
-            ->where('loans.status', 'approved_chairman')
-            ->when($memberListIds, function ($query) use ($memberListIds) {
-                $query->whereIn('loans.user_id', $memberListIds);
-            })
-            ->groupBy('loans.id', 'loans.user_id', 'loans.amount', 'loans.term_months')
-            ->get();
+        $membersList = $role === 'bendahara'
+            ? DB::table('users')
+                ->select('id', 'name', 'member_no')
+                ->where('role', 'anggota')
+                ->orderBy('name')
+                ->get()
+            : collect();
 
         $installmentMap = [];
-        foreach ($loanInstallmentRows as $loan) {
-            $remaining = max((int) $loan->term_months - (int) $loan->paid_count, 0);
-            if ($remaining < 1) {
-                continue;
+        if ($role === 'bendahara') {
+            $memberListIds = $membersList->pluck('id')->all();
+            $serviceRate = (float) config('koperasi.service_fee_rate', 0);
+            $loanInstallmentRows = DB::table('loans')
+                ->leftJoin('loan_installment_payments', function ($join) {
+                    $join->on('loans.id', '=', 'loan_installment_payments.loan_id')
+                        ->where('loan_installment_payments.status', '=', 'approved')
+                        ->where('loan_installment_payments.installment_no', '>', 0);
+                })
+                ->select(
+                    'loans.id',
+                    'loans.user_id',
+                    'loans.amount',
+                    'loans.term_months',
+                    DB::raw('count(loan_installment_payments.id) as paid_count')
+                )
+                ->where('loans.status', 'approved_chairman')
+                ->when($memberListIds, function ($query) use ($memberListIds) {
+                    $query->whereIn('loans.user_id', $memberListIds);
+                })
+                ->groupBy('loans.id', 'loans.user_id', 'loans.amount', 'loans.term_months')
+                ->get();
+
+            foreach ($loanInstallmentRows as $loan) {
+                $remaining = max((int) $loan->term_months - (int) $loan->paid_count, 0);
+                if ($remaining < 1) {
+                    continue;
+                }
+
+                $principal = $loan->amount / max((int) $loan->term_months, 1);
+                $fee = $loan->amount * $serviceRate;
+
+                if (!isset($installmentMap[$loan->user_id])) {
+                    $installmentMap[$loan->user_id] = [
+                        'principal' => 0,
+                        'fee' => 0,
+                    ];
+                }
+
+                $installmentMap[$loan->user_id]['principal'] += (float) $principal;
+                $installmentMap[$loan->user_id]['fee'] += (float) $fee;
             }
-
-            $principal = $loan->amount / max((int) $loan->term_months, 1);
-            $fee = $loan->amount * $serviceRate;
-
-            if (!isset($installmentMap[$loan->user_id])) {
-                $installmentMap[$loan->user_id] = [
-                    'principal' => 0,
-                    'fee' => 0,
-                ];
-            }
-
-            $installmentMap[$loan->user_id]['principal'] += (float) $principal;
-            $installmentMap[$loan->user_id]['fee'] += (float) $fee;
         }
 
         $memberSummaries = array_values($members);
@@ -222,6 +220,7 @@ class DeductionController extends Controller
             'types' => $types,
             'role' => $role,
             'canVerify' => $canVerify,
+            'monthNames' => $monthNames,
             'pendingLogs' => $canVerify
                 ? DB::table('deduction_logs')
                     ->join('users', 'deduction_logs.user_id', '=', 'users.id')
@@ -242,6 +241,141 @@ class DeductionController extends Controller
             'deductionDefaults' => $deductionDefaults,
             'installmentMap' => $installmentMap,
         ]);
+    }
+
+    public function rekapPdf(Request $request)
+    {
+        $role = $request->session()->get('auth.role');
+        if (in_array($role, ['anggota', 'bendahara_kantor'])) {
+            abort(403);
+        }
+
+        $types = config('koperasi.savings_types');
+        $typeKeys = array_keys($types);
+        $monthNames = $this->monthNames();
+        $monthParam = $request->query('month', 'all');
+        $year = now()->year;
+
+        $members = [];
+        $summaryTotals = [
+            'types' => array_fill_keys($typeKeys, 0),
+            'loan_principal' => 0,
+            'loan_fee' => 0,
+            'total' => 0,
+            'members' => 0,
+        ];
+
+        $savingsQuery = DB::table('savings_transactions')
+            ->join('users', 'savings_transactions.user_id', '=', 'users.id')
+            ->select(
+                'users.id',
+                'users.name',
+                'users.member_no',
+                'savings_transactions.type',
+                'savings_transactions.amount',
+                'savings_transactions.created_at'
+            )
+            ->orderBy('users.name')
+            ->orderBy('savings_transactions.created_at');
+
+        if ($monthParam !== 'all') {
+            $monthValue = (int) $monthParam;
+            if ($monthValue >= 1 && $monthValue <= 12) {
+                $savingsQuery->whereYear('savings_transactions.created_at', $year)
+                    ->whereMonth('savings_transactions.created_at', $monthValue);
+            }
+        }
+
+        $savingsRows = $savingsQuery->get();
+
+        foreach ($savingsRows as $row) {
+            if (!isset($members[$row->id])) {
+                $members[$row->id] = [
+                    'name' => $row->name,
+                    'member_no' => $row->member_no,
+                    'savings' => array_fill_keys($typeKeys, 0),
+                    'loan_principal' => 0,
+                    'loan_fee' => 0,
+                    'total' => 0,
+                ];
+            }
+
+            $members[$row->id]['savings'][$row->type] += (float) $row->amount;
+        }
+
+        $paymentQuery = DB::table('loan_installment_payments')
+            ->join('loans', 'loan_installment_payments.loan_id', '=', 'loans.id')
+            ->join('users', 'loans.user_id', '=', 'users.id')
+            ->select(
+                'users.id',
+                'users.name',
+                'users.member_no',
+                'loan_installment_payments.amount_principal',
+                'loan_installment_payments.amount_fee',
+                'loan_installment_payments.paid_at'
+            )
+            ->where('loan_installment_payments.status', 'approved')
+            ->where('loan_installment_payments.installment_no', '>', 0)
+            ->orderBy('users.name')
+            ->orderBy('loan_installment_payments.paid_at');
+
+        if ($monthParam !== 'all') {
+            $monthValue = (int) $monthParam;
+            if ($monthValue >= 1 && $monthValue <= 12) {
+                $paymentQuery->whereYear('loan_installment_payments.paid_at', $year)
+                    ->whereMonth('loan_installment_payments.paid_at', $monthValue);
+            }
+        }
+
+        $paymentRows = $paymentQuery->get();
+
+        foreach ($paymentRows as $row) {
+            if (!isset($members[$row->id])) {
+                $members[$row->id] = [
+                    'name' => $row->name,
+                    'member_no' => $row->member_no,
+                    'savings' => array_fill_keys($typeKeys, 0),
+                    'loan_principal' => 0,
+                    'loan_fee' => 0,
+                    'total' => 0,
+                ];
+            }
+
+            $members[$row->id]['loan_principal'] += (float) $row->amount_principal;
+            $members[$row->id]['loan_fee'] += (float) $row->amount_fee;
+        }
+
+        foreach ($members as $id => $member) {
+            $memberSavingsTotal = array_sum($member['savings']);
+            $memberTotal = $memberSavingsTotal + $member['loan_principal'] + $member['loan_fee'];
+            $members[$id]['total'] = $memberTotal;
+
+            foreach ($member['savings'] as $type => $amount) {
+                $summaryTotals['types'][$type] += (float) $amount;
+            }
+            $summaryTotals['loan_principal'] += (float) $member['loan_principal'];
+            $summaryTotals['loan_fee'] += (float) $member['loan_fee'];
+            $summaryTotals['total'] += (float) $memberTotal;
+        }
+
+        $summaryTotals['members'] = count($members);
+
+        $periodLabel = 'Januari - ' . now()->translatedFormat('F Y');
+        if ($monthParam !== 'all') {
+            $monthValue = (int) $monthParam;
+            if ($monthValue >= 1 && $monthValue <= 12) {
+                $periodLabel = ($monthNames[$monthValue] ?? $monthValue) . ' ' . $year;
+            }
+        }
+
+        $pdf = PDF::loadView('deductions.rekap_pdf', [
+            'members' => array_values($members),
+            'types' => $types,
+            'summaryTotals' => $summaryTotals,
+            'periodLabel' => $periodLabel,
+        ])->setPaper('a4', 'portrait');
+
+        return $pdf->stream('rekap-pemotongan.pdf');
     }
 
     public function store(Request $request)
@@ -469,6 +603,24 @@ class DeductionController extends Controller
                 'created_at' => now(),
                 'updated_at' => now(),
             ]);
+
+            if ($logStatus === 'pending') {
+                $amountLabel = number_format((float) $totalDeduction, 2, ',', '.');
+                $memberLabel = $deduction->name . ($deduction->member_no ? ' (' . $deduction->member_no . ')' : '');
+                $verifyLink = route('deductions.index');
+                $notifier = new FonnteService();
+                $notifier->notifyRole(
+                    'bendahara_kantor',
+                    $notifier->formatMessage([
+                        "🧮 Pemotongan gaji menunggu verifikasi.",
+                        "Nama: {$deduction->name}",
+                        "No. Anggota: " . ($deduction->member_no ?? '-'),
+                        "Periode: {$month}/{$year}",
+                        "Nominal: Rp {$amountLabel}",
+                        "Tindak lanjut: {$verifyLink}",
+                    ], '🤝')
+                );
+            }
         }
     }
 
@@ -543,8 +695,39 @@ class DeductionController extends Controller
                 ]);
         });
 
+        $deductionLink = route('deductions.index');
+        $notifier = new FonnteService();
+        $notifier->notifyRole(
+            'bendahara',
+            $notifier->formatMessage([
+                "✅ Pemotongan gaji telah diverifikasi bendahara kantor.",
+                "Nama: " . ($member->name ?? 'Anggota'),
+                "Periode: " . ($log->month ?? '-') . "/" . ($log->year ?? '-'),
+                "Nominal: Rp " . number_format((float) $log->total_amount, 2, ',', '.'),
+                "Detail: {$deductionLink}",
+            ], '🤝')
+        );
+
         return redirect()
             ->route('deductions.index')
             ->with('success', 'Pemotongan berhasil diverifikasi.');
+    }
+
+    private function monthNames()
+    {
+        return [
+            1 => 'Januari',
+            2 => 'Februari',
+            3 => 'Maret',
+            4 => 'April',
+            5 => 'Mei',
+            6 => 'Juni',
+            7 => 'Juli',
+            8 => 'Agustus',
+            9 => 'September',
+            10 => 'Oktober',
+            11 => 'November',
+            12 => 'Desember',
+        ];
     }
 }

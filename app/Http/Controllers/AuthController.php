@@ -45,9 +45,15 @@ class AuthController extends Controller
             'name' => $user->name,
             'email' => $user->email,
             'role' => $user->role,
+            'two_factor_enabled' => (bool) ($user->two_factor_enabled ?? false),
+            'two_factor_passed' => !(bool) ($user->two_factor_enabled ?? false),
         ]);
 
         $request->session()->regenerate();
+
+        if (!empty($user->two_factor_enabled)) {
+            return redirect()->route('authenticator.verify');
+        }
 
         return redirect()->route('dashboard');
     }

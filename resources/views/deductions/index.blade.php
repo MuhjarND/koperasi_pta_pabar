@@ -59,7 +59,14 @@
                 <h3>Rekap Pemotongan</h3>
             </div>
             @if($role === 'bendahara')
-                <button class="btn btn-primary" type="button" data-modal-open="deduction-modal">Atur Pemotongan</button>
+                <div class="action-row">
+                    <button class="btn btn-primary" type="button" data-modal-open="deduction-modal">Atur Pemotongan</button>
+                    <button class="btn btn-ghost" type="button" data-modal-open="deduction-rekap-modal">Preview Rekap PDF</button>
+                </div>
+            @elseif(!in_array($role, ['bendahara_kantor', 'anggota']))
+                <div class="action-row">
+                    <button class="btn btn-ghost" type="button" data-modal-open="deduction-rekap-modal">Preview Rekap PDF</button>
+                </div>
             @endif
         </div>
         <table class="table">
@@ -372,6 +379,83 @@
                 } else {
                     updateDeductionAmounts();
                     updateInstallments();
+                }
+            });
+        </script>
+    @endif
+
+    @if(!in_array($role, ['bendahara_kantor', 'anggota']))
+        <dialog class="modal" id="deduction-rekap-modal">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <div>
+                        <h3>Preview Rekap Pemotongan (PDF)</h3>
+                        <p class="muted">Pratinjau rekap pemotongan dalam format PDF.</p>
+                    </div>
+                    <button class="btn btn-ghost" type="button" data-modal-close-rekap>Keluar</button>
+                </div>
+                <div class="action-row" style="margin-bottom: 12px;">
+                    <label class="muted" style="font-size: 13px;">Filter Bulan</label>
+                    <select id="deduction-rekap-month-filter">
+                        <option value="all">Semua</option>
+                        @foreach($monthNames as $number => $label)
+                            <option value="{{ $number }}">{{ $label }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <iframe class="pdf-preview" src="{{ route('deductions.rekap.pdf') }}" title="Rekap Pemotongan PDF" data-rekap-src="{{ route('deductions.rekap.pdf') }}"></iframe>
+            </div>
+        </dialog>
+
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const modal = document.getElementById('deduction-rekap-modal');
+                const monthFilter = document.getElementById('deduction-rekap-month-filter');
+                const iframe = modal ? modal.querySelector('.pdf-preview') : null;
+                const openButtons = document.querySelectorAll('[data-modal-open="deduction-rekap-modal"]');
+                const closeButtons = modal ? modal.querySelectorAll('[data-modal-close-rekap]') : [];
+
+                const openModal = () => {
+                    if (!modal) return;
+                    if (typeof modal.showModal === 'function') {
+                        modal.showModal();
+                    } else {
+                        modal.setAttribute('open', 'open');
+                    }
+                };
+
+                const closeModal = () => {
+                    if (!modal) return;
+                    if (typeof modal.close === 'function') {
+                        modal.close();
+                    } else {
+                        modal.removeAttribute('open');
+                    }
+                };
+
+                openButtons.forEach((btn) => {
+                    btn.addEventListener('click', openModal);
+                });
+
+                closeButtons.forEach((btn) => {
+                    btn.addEventListener('click', closeModal);
+                });
+
+                if (monthFilter && iframe) {
+                    const baseUrl = iframe.getAttribute('data-rekap-src') || '';
+                    monthFilter.addEventListener('change', () => {
+                        const month = monthFilter.value || 'all';
+                        const url = month === 'all' ? baseUrl : (baseUrl + '?month=' + month);
+                        iframe.src = url;
+                    });
+                }
+
+                if (modal) {
+                    modal.addEventListener('click', (event) => {
+                        if (event.target === modal) {
+                            closeModal();
+                        }
+                    });
                 }
             });
         </script>

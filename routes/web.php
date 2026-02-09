@@ -9,11 +9,13 @@ use App\Http\Controllers\InviteController;
 use App\Http\Controllers\LoanController;
 use App\Http\Controllers\LoanPaymentController;
 use App\Http\Controllers\MemberController;
+use App\Http\Controllers\MartBalanceController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\PublicRegistrationController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SaleController;
 use App\Http\Controllers\SavingsController;
+use App\Http\Controllers\TwoFactorController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -44,6 +46,11 @@ Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::middleware(['session.auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
+    Route::get('/authenticator', [TwoFactorController::class, 'setup'])->name('authenticator.setup');
+    Route::post('/authenticator/enable', [TwoFactorController::class, 'enable'])->name('authenticator.enable');
+    Route::get('/authenticator/verify', [TwoFactorController::class, 'verifyForm'])->name('authenticator.verify');
+    Route::post('/authenticator/verify', [TwoFactorController::class, 'verify'])->name('authenticator.verify.submit');
+
     Route::get('/saldo', [BalanceController::class, 'index'])->name('saldo.index');
     Route::post('/saldo', [BalanceController::class, 'store'])
         ->middleware('role:bendahara')
@@ -54,6 +61,9 @@ Route::middleware(['session.auth'])->group(function () {
     Route::get('/saldo/export', [BalanceController::class, 'export'])->name('saldo.export');
 
     Route::get('/simpanan', [SavingsController::class, 'index'])->name('savings.index');
+    Route::get('/simpanan/rekap/pdf', [SavingsController::class, 'rekapPdf'])
+        ->middleware('role:superadmin|sekretaris|bendahara|ketua')
+        ->name('savings.rekap.pdf');
     Route::post('/simpanan', [SavingsController::class, 'store'])
         ->middleware('role:bendahara')
         ->name('savings.store');
@@ -69,6 +79,9 @@ Route::middleware(['session.auth'])->group(function () {
         ->middleware('role:bendahara')
         ->name('savings.post');
     Route::get('/pemotongan', [DeductionController::class, 'index'])->name('deductions.index');
+    Route::get('/pemotongan/rekap/pdf', [DeductionController::class, 'rekapPdf'])
+        ->middleware('role:superadmin|sekretaris|bendahara|ketua')
+        ->name('deductions.rekap.pdf');
     Route::post('/pemotongan', [DeductionController::class, 'store'])
         ->middleware('role:bendahara')
         ->name('deductions.store');
@@ -78,6 +91,9 @@ Route::middleware(['session.auth'])->group(function () {
     Route::post('/pemotongan/{id}/verify', [DeductionController::class, 'verify'])
         ->middleware('role:bendahara_kantor|superadmin')
         ->name('deductions.verify');
+    Route::get('/pinjaman/rekap/pdf', [LoanPaymentController::class, 'rekapPdf'])
+        ->middleware('role:superadmin|sekretaris|bendahara|ketua')
+        ->name('loans.rekap.pdf');
 
     Route::prefix('anggota-data')->middleware('role:superadmin|sekretaris')->group(function () {
         Route::get('/', [MemberController::class, 'index'])->name('members.index');
@@ -108,6 +124,16 @@ Route::middleware(['session.auth'])->group(function () {
         Route::get('/{id}/edit', [ProductController::class, 'edit'])->name('products.edit');
         Route::post('/{id}', [ProductController::class, 'update'])->name('products.update');
     });
+
+    Route::get('/koperasi-mart/saldo', [MartBalanceController::class, 'index'])
+        ->middleware('role:sekretaris|superadmin')
+        ->name('mart.balance.index');
+    Route::post('/koperasi-mart/saldo', [MartBalanceController::class, 'store'])
+        ->middleware('role:sekretaris')
+        ->name('mart.balance.store');
+    Route::post('/koperasi-mart/saldo/{id}/verify', [MartBalanceController::class, 'verify'])
+        ->middleware('role:sekretaris|superadmin')
+        ->name('mart.balance.verify');
 
     Route::prefix('penjualan')->middleware('role:sekretaris')->group(function () {
         Route::get('/', [SaleController::class, 'index'])->name('sales.index');
@@ -148,9 +174,11 @@ Route::middleware(['session.auth'])->group(function () {
         ->name('dashboard.anggota');
 
     Route::prefix('anggota')->middleware('role:anggota')->group(function () {
+        Route::get('/keuangan', [DashboardController::class, 'anggotaKeuangan'])->name('anggota.keuangan');
         Route::get('/pinjaman', [LoanController::class, 'memberIndex'])->name('anggota.loans.index');
         Route::get('/pinjaman/create', [LoanController::class, 'memberCreate'])->name('anggota.loans.create');
         Route::post('/pinjaman', [LoanController::class, 'memberStore'])->name('anggota.loans.store');
+        Route::get('/pinjaman/{id}/dokumen', [LoanController::class, 'memberDocument'])->name('anggota.loans.document');
         Route::get('/pinjaman/peserta', [LoanPaymentController::class, 'index'])->name('anggota.loans.payments');
         Route::post('/pinjaman/peserta', [LoanPaymentController::class, 'store'])->name('anggota.loans.payments.store');
     });
@@ -164,6 +192,8 @@ Route::middleware(['session.auth'])->group(function () {
 
     Route::prefix('bendahara')->middleware('role:bendahara')->group(function () {
         Route::get('/pinjaman', [LoanController::class, 'bendaharaIndex'])->name('bendahara.loans.index');
+        Route::get('/pinjaman/pencairan', [LoanController::class, 'bendaharaDisbursementIndex'])->name('bendahara.loans.disbursement');
+        Route::post('/pinjaman/pencairan/{id}', [LoanController::class, 'bendaharaDisbursementStore'])->name('bendahara.loans.disbursement.store');
         Route::get('/pinjaman/peserta', [LoanPaymentController::class, 'index'])->name('bendahara.loans.payments');
         Route::post('/pinjaman/peserta', [LoanPaymentController::class, 'store'])->name('bendahara.loans.payments.store');
         Route::post('/pinjaman/peserta/pelunasan/{id}/approve', [LoanPaymentController::class, 'approveSettlement'])

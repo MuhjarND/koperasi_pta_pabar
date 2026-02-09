@@ -112,6 +112,18 @@ class SaleController extends Controller
 
             DB::table('sale_items')->insert($itemsData);
 
+            DB::table('mart_cash_entries')->insert([
+                'entry_date' => $now->toDateString(),
+                'direction' => 'in',
+                'description' => 'Penjualan (' . ($payload['buyer_name'] ?? 'Umum') . ')',
+                'amount' => $total,
+                'category' => 'penjualan',
+                'status' => 'approved',
+                'created_by' => $request->session()->get('auth.id'),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+
             DB::commit();
         } catch (\Exception $exception) {
             DB::rollBack();

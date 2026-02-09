@@ -182,7 +182,8 @@ class ReportController extends Controller
 
         $loanApproved = DB::table('loans')
             ->where('status', 'approved_chairman')
-            ->whereBetween('chairman_approved_at', [$start, $end])
+            ->whereNotNull('transfered_at')
+            ->whereBetween('transfered_at', [$start, $end])
             ->sum('amount');
 
         $loanRejected = DB::table('loans')
@@ -380,14 +381,18 @@ class ReportController extends Controller
         $operationalCost = $this->fromCents($operationalCostCents);
         $shuBase = $this->fromCents($shuBaseCents);
         $shuBreakdownParts = $this->allocatePercentCents($shuBaseCents, [30, 25, 15, 15, 10, 5]);
+        $danaPengurus = $this->fromCents($shuBreakdownParts[2] ?? 0);
+        $danaCadangan = $this->fromCents($shuBreakdownParts[3] ?? 0);
+        $danaSosial = $this->fromCents($shuBreakdownParts[4] ?? 0);
+        $danaPendidikan = $this->fromCents($shuBreakdownParts[5] ?? 0);
         $shuBreakdown = [
             ['name' => 'Biaya Operasional (25%)', 'amount' => $operationalCost],
             ['name' => 'SHU Pinjaman (30%)', 'amount' => $this->fromCents($shuBreakdownParts[0] ?? 0)],
             ['name' => 'SHU Partisipasi Usaha (25%)', 'amount' => $this->fromCents($shuBreakdownParts[1] ?? 0)],
-            ['name' => 'Dana Pengurus (15%)', 'amount' => $this->fromCents($shuBreakdownParts[2] ?? 0)],
-            ['name' => 'Dana Cadangan (15%)', 'amount' => $this->fromCents($shuBreakdownParts[3] ?? 0)],
-            ['name' => 'Dana Sosial (10%)', 'amount' => $this->fromCents($shuBreakdownParts[4] ?? 0)],
-            ['name' => 'Dana Pendidikan (5%)', 'amount' => $this->fromCents($shuBreakdownParts[5] ?? 0)],
+            ['name' => 'Dana Pengurus (15%)', 'amount' => $danaPengurus],
+            ['name' => 'Dana Cadangan (15%)', 'amount' => $danaCadangan],
+            ['name' => 'Dana Sosial (10%)', 'amount' => $danaSosial],
+            ['name' => 'Dana Pendidikan (5%)', 'amount' => $danaPendidikan],
         ];
 
         $rate = config('koperasi.service_fee_rate');
@@ -401,7 +406,7 @@ class ReportController extends Controller
             ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
             ->where(function ($query) {
                 $query->whereNull('category')
-                    ->orWhereNotIn('category', ['potongan', 'simpanan', 'pelunasan']);
+                    ->orWhereNotIn('category', ['potongan', 'simpanan', 'pelunasan', 'saldo_awal']);
             })
             ->sum('amount');
 
@@ -444,16 +449,136 @@ class ReportController extends Controller
             ->sum('amount');
 
         $inventoryValue = DB::table('products')
-            ->select(DB::raw('sum(stock * price) as total'))
+            ->select(DB::raw('sum(stock * modal) as total'))
             ->value('total') ?? 0;
 
-        $loanReceivable = DB::table('loans')
+        $approvedLoansTotal = DB::table('loans')
             ->where('status', 'approved_chairman')
-            ->where('chairman_approved_at', '<=', $end)
+            ->whereNotNull('transfered_at')
+            ->where('transfered_at', '<=', $end)
             ->sum('amount');
 
-        $cashBalance = ($savingsBalance + $salesTotal) - $loanApproved;
-        $totalAssets = $cashBalance + $inventoryValue + $loanReceivable;
+        $paidPrincipal = DB::table('loan_installment_payments')
+            ->join('loans', 'loan_installment_payments.loan_id', '=', 'loans.id')
+            ->where('loans.status', 'approved_chairman')
+            ->whereNotNull('loans.transfered_at')
+            ->where('loan_installment_payments.status', 'approved')
+            ->where('loan_installment_payments.paid_at', '<=', $end->toDateString())
+            ->sum('loan_installment_payments.amount_principal');
+
+        $loanReceivable = max(0, (float) $approvedLoansTotal - (float) $paidPrincipal);
+
+        $loanReceipts = DB::table('loan_installment_payments')
+            ->where('status', 'approved')
+            ->where('installment_no', '>', 0)
+            ->where('paid_at', '<=', $end->toDateString())
+            ->where(function ($query) {
+                $query->whereNull('note')
+                    ->orWhereNotIn('note', ['Potong Gaji', 'Pelunasan']);
+            })
+            ->select(DB::raw('sum(amount_principal + amount_fee) as total'))
+            ->value('total');
+
+        $cashInApproved = DB::table('cash_entries')
+            ->where('direction', 'in')
+            ->whereIn('category', ['potongan', 'simpanan', 'pelunasan', 'saldo_awal'])
+            ->where(function ($query) {
+                $query->whereNull('status')
+                    ->orWhere('status', 'approved');
+            })
+            ->where('entry_date', '<=', $end->toDateString())
+            ->sum('amount');
+
+        $cashOutApproved = DB::table('cash_entries')
+            ->where('direction', 'out')
+            ->where(function ($query) {
+                $query->whereNull('status')
+                    ->orWhere('status', 'approved');
+            })
+            ->where('entry_date', '<=', $end->toDateString())
+            ->sum('amount');
+
+        $cashBalance = (float) ($loanReceipts ?? 0)
+            + (float) $cashInApproved
+            - (float) $cashOutApproved;
+
+        $tradeCash = DB::table('sales')
+            ->where('created_at', '<=', $end)
+            ->sum('total_amount');
+
+        $investmentItems = DB::table('cash_entries')
+            ->select('description', DB::raw('sum(amount) as total'))
+            ->where('direction', 'out')
+            ->where('category', 'investasi')
+            ->where(function ($query) {
+                $query->whereNull('status')
+                    ->orWhere('status', 'approved');
+            })
+            ->where('entry_date', '<=', $end->toDateString())
+            ->groupBy('description')
+            ->orderBy('description')
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'name' => $row->description ?: 'Tanpa Keterangan',
+                    'amount' => (float) $row->total,
+                ];
+            })
+            ->toArray();
+
+        $inventoryItems = DB::table('cash_entries')
+            ->select('description', DB::raw('sum(amount) as total'))
+            ->where('direction', 'out')
+            ->where('category', 'inventaris')
+            ->where(function ($query) {
+                $query->whereNull('status')
+                    ->orWhere('status', 'approved');
+            })
+            ->where('entry_date', '<=', $end->toDateString())
+            ->groupBy('description')
+            ->orderBy('description')
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'name' => $row->description ?: 'Tanpa Keterangan',
+                    'amount' => (float) $row->total,
+                ];
+            })
+            ->toArray();
+
+        $investmentTotal = $this->sumItems($investmentItems);
+        $inventoryTotal = $this->sumItems($inventoryItems);
+        $currentAssetsTotal = (float) $cashBalance
+            + (float) $loanReceivable
+            + (float) $tradeCash
+            + (float) $inventoryValue;
+        $totalAssets = $currentAssetsTotal + (float) $investmentTotal + (float) $inventoryTotal;
+
+        $unpaidRat = DB::table('cash_entries')
+            ->where('direction', 'out')
+            ->where('category', 'rat')
+            ->where('status', 'pending')
+            ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
+            ->sum('amount');
+
+        $pasivaLancarItems = [
+            ['name' => 'Simpanan Sukarela', 'amount' => (float) ($savingsByType['sukarela'] ?? 0)],
+            ['name' => 'Biaya RAT Belum Dibayar', 'amount' => (float) $unpaidRat],
+            ['name' => 'Dana Pengurus', 'amount' => (float) $danaPengurus],
+            ['name' => 'Dana Pendidikan', 'amount' => (float) $danaPendidikan],
+            ['name' => 'Dana Sosial', 'amount' => (float) $danaSosial],
+        ];
+        $pasivaLancarTotal = $this->sumItems($pasivaLancarItems);
+
+        $modalSendiriItems = [
+            ['name' => 'Simpanan Pokok', 'amount' => (float) ($savingsByType['pokok'] ?? 0)],
+            ['name' => 'Simpanan Wajib', 'amount' => (float) ($savingsByType['wajib'] ?? 0)],
+            ['name' => 'HU Dagang', 'amount' => (float) $tradeTotal],
+            ['name' => 'Dana Cadangan', 'amount' => (float) $danaCadangan],
+            ['name' => 'Laba Bersih', 'amount' => (float) $shu],
+        ];
+        $modalSendiriTotal = $this->sumItems($modalSendiriItems);
+        $pasivaTotal = $pasivaLancarTotal + $modalSendiriTotal;
         $totalLiabilities = $savingsBalance;
         $equityTarget = max(0, $totalAssets - $totalLiabilities);
         $equityOpening = max(0, $equityTarget - $shu);
@@ -473,9 +598,10 @@ class ReportController extends Controller
             ->get();
 
         $loanJournal = DB::table('loans')
-            ->select('chairman_approved_at as date', DB::raw("'Pencairan Pinjaman' as source"), 'amount', DB::raw("'out' as direction"), 'applicant_name as description')
+            ->select('transfered_at as date', DB::raw("'Pencairan Pinjaman' as source"), 'amount', DB::raw("'out' as direction"), 'applicant_name as description')
             ->where('status', 'approved_chairman')
-            ->whereBetween('chairman_approved_at', [$start, $end])
+            ->whereNotNull('transfered_at')
+            ->whereBetween('transfered_at', [$start, $end])
             ->get();
 
         $journal = collect($savingsJournal)
@@ -538,6 +664,22 @@ class ReportController extends Controller
             'totalAssets' => $totalAssets,
             'totalLiabilities' => $totalLiabilities,
             'equityItems' => $equityItems,
+            'tradeCash' => $tradeCash,
+            'currentAssetsTotal' => $currentAssetsTotal,
+            'investmentItems' => $investmentItems,
+            'investmentTotal' => $investmentTotal,
+            'inventoryItems' => $inventoryItems,
+            'inventoryTotal' => $inventoryTotal,
+            'danaPengurus' => $danaPengurus,
+            'danaCadangan' => $danaCadangan,
+            'danaSosial' => $danaSosial,
+            'danaPendidikan' => $danaPendidikan,
+            'unpaidRat' => $unpaidRat,
+            'pasivaLancarItems' => $pasivaLancarItems,
+            'pasivaLancarTotal' => $pasivaLancarTotal,
+            'modalSendiriItems' => $modalSendiriItems,
+            'modalSendiriTotal' => $modalSendiriTotal,
+            'pasivaTotal' => $pasivaTotal,
             'journal' => $journal,
         ];
     }

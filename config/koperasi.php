@@ -11,9 +11,9 @@ return [
     ],
     'status_labels' => [
         'submitted' => 'Menunggu Review Sekretaris',
-        'reviewed' => 'Menunggu Persetujuan Bendahara',
         'approved_treasurer' => 'Menunggu Persetujuan Ketua',
-        'approved_chairman' => 'Disetujui Ketua',
+        'reviewed' => 'Menunggu Persetujuan Bendahara',
+        'approved_chairman' => 'Disetujui Bendahara',
         'rejected' => 'Ditolak',
     ],
     'status_badges' => [
