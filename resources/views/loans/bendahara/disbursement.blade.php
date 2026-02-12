@@ -44,10 +44,10 @@
                             @endif
                         </td>
                         <td data-label="Bukti Transfer">
-                            <form method="post" action="{{ route('bendahara.loans.disbursement.store', $loan->id) }}" enctype="multipart/form-data" class="action-row">
+                            <form method="post" action="{{ route('bendahara.loans.disbursement.store', $loan->id) }}" enctype="multipart/form-data" class="action-row upload-action-row">
                                 @csrf
                                 <input type="file" name="transfer_evidence" accept=".jpg,.jpeg,.png,.pdf" required>
-                                <button class="btn btn-primary" type="submit">Unggah</button>
+                                <button class="btn btn-upload" type="submit">Unggah</button>
                             </form>
                         </td>
                     </tr>

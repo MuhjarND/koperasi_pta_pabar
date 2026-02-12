@@ -651,17 +651,7 @@ class DeductionController extends Controller
             ->where('id', $log->user_id)
             ->first();
 
-        $file = $request->file('evidence');
-        $folder = 'uploads/deductions';
-        $publicFolder = public_path($folder);
-
-        if (!is_dir($publicFolder)) {
-            mkdir($publicFolder, 0755, true);
-        }
-
-        $filename = uniqid('deduction_', true) . '.' . $file->getClientOriginalExtension();
-        $file->move($publicFolder, $filename);
-        $evidencePath = $folder . '/' . $filename;
+        $evidencePath = $this->storeDeductionEvidence($request->file('evidence'));
 
         $verifiedAt = now();
         $verifierId = $request->session()->get('auth.id');
@@ -711,6 +701,107 @@ class DeductionController extends Controller
         return redirect()
             ->route('deductions.index')
             ->with('success', 'Pemotongan berhasil diverifikasi.');
+    }
+
+    public function verifyAll(Request $request)
+    {
+        $role = $request->session()->get('auth.role');
+        if (!in_array($role, ['bendahara_kantor', 'superadmin'])) {
+            return redirect()->route('deductions.index');
+        }
+
+        $request->validate([
+            'evidence' => 'required|file|mimes:jpg,jpeg,png,pdf|max:4096',
+        ]);
+
+        $logs = DB::table('deduction_logs as l')
+            ->join('users as u', 'l.user_id', '=', 'u.id')
+            ->select(
+                'l.id',
+                'l.user_id',
+                'l.month',
+                'l.year',
+                'l.total_amount',
+                'l.processed_at',
+                'u.name as member_name'
+            )
+            ->where('l.status', 'pending')
+            ->orderBy('l.id')
+            ->get();
+
+        if ($logs->isEmpty()) {
+            return redirect()
+                ->route('deductions.index')
+                ->withErrors(['error' => 'Tidak ada data pemotongan pending untuk divalidasi.']);
+        }
+
+        $evidencePath = $this->storeDeductionEvidence($request->file('evidence'));
+        $verifiedAt = now();
+        $verifierId = $request->session()->get('auth.id');
+
+        DB::transaction(function () use ($logs, $evidencePath, $verifiedAt, $verifierId) {
+            foreach ($logs as $log) {
+                $entryDate = $log->processed_at ? Carbon::parse($log->processed_at) : $verifiedAt;
+
+                if ((float) $log->total_amount > 0) {
+                    DB::table('cash_entries')->insert([
+                        'entry_date' => $entryDate->toDateString(),
+                        'direction' => 'in',
+                        'description' => 'Terima dari Bendahara (' . ($log->member_name ?? 'Anggota') . ')',
+                        'amount' => (float) $log->total_amount,
+                        'category' => 'potongan',
+                        'user_id' => $log->user_id,
+                        'evidence_path' => $evidencePath,
+                        'status' => 'approved',
+                        'created_by' => $verifierId,
+                        'created_at' => $verifiedAt,
+                        'updated_at' => $verifiedAt,
+                    ]);
+                }
+
+                DB::table('deduction_logs')
+                    ->where('id', $log->id)
+                    ->update([
+                        'status' => 'verified',
+                        'evidence_path' => $evidencePath,
+                        'verified_by' => $verifierId,
+                        'verified_at' => $verifiedAt,
+                        'updated_at' => $verifiedAt,
+                    ]);
+            }
+        });
+
+        $totalNominal = (float) $logs->sum('total_amount');
+        $deductionLink = route('deductions.index');
+        $notifier = new FonnteService();
+        $notifier->notifyRole(
+            'bendahara',
+            $notifier->formatMessage([
+                "Validasi massal pemotongan gaji telah selesai diproses.",
+                "Jumlah data: " . $logs->count() . " anggota",
+                "Total nominal: Rp " . number_format($totalNominal, 2, ',', '.'),
+                "Detail: {$deductionLink}",
+            ], '🤝')
+        );
+
+        return redirect()
+            ->route('deductions.index')
+            ->with('success', 'Seluruh pemotongan pending berhasil diverifikasi dengan satu eviden.');
+    }
+
+    private function storeDeductionEvidence($file)
+    {
+        $folder = 'uploads/deductions';
+        $publicFolder = public_path($folder);
+
+        if (!is_dir($publicFolder)) {
+            mkdir($publicFolder, 0755, true);
+        }
+
+        $filename = uniqid('deduction_', true) . '.' . $file->getClientOriginalExtension();
+        $file->move($publicFolder, $filename);
+
+        return $folder . '/' . $filename;
     }
 
     private function monthNames()

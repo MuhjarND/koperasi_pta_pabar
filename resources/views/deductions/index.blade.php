@@ -12,6 +12,17 @@
                     <h3>Verifikasi Pemotongan</h3>
                 </div>
             </div>
+            <form method="post" action="{{ route('deductions.verify.all') }}" enctype="multipart/form-data" class="action-row" style="margin-bottom: 12px; justify-content: space-between; align-items: end;">
+                @csrf
+                <div>
+                    <div class="muted">Validasi semua data pending sekaligus dengan satu eviden.</div>
+                    <div class="muted">Total pending: {{ $pendingLogs->count() }} data | Total nominal: Rp {{ number_format((float) $pendingLogs->sum('total_amount'), 2, ',', '.') }}</div>
+                </div>
+                <div class="action-row">
+                    <input type="file" name="evidence" accept=".jpg,.jpeg,.png,.pdf" required>
+                    <button class="btn btn-primary" type="submit" @if($pendingLogs->isEmpty()) disabled @endif>Validasi Seluruh</button>
+                </div>
+            </form>
             <table class="table">
                 <thead>
                     <tr>

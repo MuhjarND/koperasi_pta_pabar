@@ -46,6 +46,16 @@
     <div class="card" style="margin-top: 16px;">
         <div class="card-header">
             <div class="card-title">
+                <div class="card-icon">@include('partials.icon', ['name' => 'plus'])</div>
+                <h3>Aksi Cepat</h3>
+            </div>
+            <a class="btn btn-primary" href="{{ route('anggota.loans.create') }}">Ajukan Peminjaman</a>
+        </div>
+    </div>
+
+    <div class="card" style="margin-top: 16px;">
+        <div class="card-header">
+            <div class="card-title">
                 <div class="card-icon">@include('partials.icon', ['name' => 'history'])</div>
                 <h3>Daftar Pemotongan Terbaru</h3>
             </div>

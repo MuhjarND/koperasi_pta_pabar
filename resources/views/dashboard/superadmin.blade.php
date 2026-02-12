@@ -53,6 +53,7 @@
                 <a class="btn btn-ghost" href="{{ route('dashboard.bendahara_kantor') }}">Dashboard Bendahara Kantor</a>
                 <a class="btn btn-ghost" href="{{ route('dashboard.ketua') }}">Dashboard Ketua</a>
                 <a class="btn btn-ghost" href="{{ route('dashboard.anggota') }}">Dashboard Anggota</a>
+                <a class="btn btn-primary" href="{{ route('anggota.loans.create') }}">Ajukan Peminjaman</a>
             </div>
         </div>
         <div class="card">

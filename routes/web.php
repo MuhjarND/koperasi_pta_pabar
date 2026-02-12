@@ -91,6 +91,9 @@ Route::middleware(['session.auth'])->group(function () {
     Route::post('/pemotongan/{id}/verify', [DeductionController::class, 'verify'])
         ->middleware('role:bendahara_kantor|superadmin')
         ->name('deductions.verify');
+    Route::post('/pemotongan/verify-all', [DeductionController::class, 'verifyAll'])
+        ->middleware('role:bendahara_kantor|superadmin')
+        ->name('deductions.verify.all');
     Route::get('/pinjaman/rekap/pdf', [LoanPaymentController::class, 'rekapPdf'])
         ->middleware('role:superadmin|sekretaris|bendahara|ketua')
         ->name('loans.rekap.pdf');
@@ -173,7 +176,7 @@ Route::middleware(['session.auth'])->group(function () {
         ->middleware('role:anggota')
         ->name('dashboard.anggota');
 
-    Route::prefix('anggota')->middleware('role:anggota')->group(function () {
+    Route::prefix('anggota')->middleware('role:anggota|sekretaris|bendahara|bendahara_kantor|ketua|superadmin')->group(function () {
         Route::get('/keuangan', [DashboardController::class, 'anggotaKeuangan'])->name('anggota.keuangan');
         Route::get('/pinjaman', [LoanController::class, 'memberIndex'])->name('anggota.loans.index');
         Route::get('/pinjaman/create', [LoanController::class, 'memberCreate'])->name('anggota.loans.create');
@@ -185,6 +188,9 @@ Route::middleware(['session.auth'])->group(function () {
 
     Route::prefix('sekretaris')->middleware('role:sekretaris')->group(function () {
         Route::get('/pinjaman', [LoanController::class, 'sekretarisIndex'])->name('sekretaris.loans.index');
+        Route::get('/pinjaman/pelunasan', [LoanPaymentController::class, 'secretarySettlements'])->name('sekretaris.loans.settlements');
+        Route::post('/pinjaman/pelunasan/{id}/approve', [LoanPaymentController::class, 'approveSettlement'])
+            ->name('sekretaris.loans.settlements.approve');
         Route::get('/pinjaman/{id}', [LoanController::class, 'sekretarisShow'])->name('sekretaris.loans.show');
         Route::post('/pinjaman/{id}/review', [LoanController::class, 'sekretarisReview'])
             ->name('sekretaris.loans.review');

@@ -166,7 +166,7 @@ class LoanController extends Controller
         $notifier = new FonnteService();
         $amountLabel = number_format((float) $payload['amount'], 2, ',', '.');
         $memberLabel = ($member->name ?? 'Anggota') . ($member->member_no ? ' (' . $member->member_no . ')' : '');
-        $sekretarisLink = route('sekretaris.loans.index');
+        $sekretarisLink = route('sekretaris.loans.show', $loanId);
         $notifier->notifyRole(
             'sekretaris',
             $notifier->formatMessage([
@@ -523,7 +523,7 @@ class LoanController extends Controller
         if ($decision['decision'] === 'approve') {
             $this->generateLoanPdf($id);
             $memberLabel = ($member->name ?? 'Anggota') . ($member->member_no ? ' (' . $member->member_no . ')' : '');
-            $ketuaLink = route('ketua.loans.index');
+            $ketuaLink = route('ketua.loans.show', $id);
             $notifier = new FonnteService();
             $notifier->notifyRole(
                 'ketua',
@@ -1005,7 +1005,7 @@ class LoanController extends Controller
 
         if ($decision['decision'] === 'approve') {
             $notifier = new FonnteService();
-            $bendaharaLink = route('bendahara.loans.index');
+            $bendaharaLink = route('bendahara.loans.show', $id);
             $notifier->notifyRole(
                 'bendahara',
                 $notifier->formatMessage([

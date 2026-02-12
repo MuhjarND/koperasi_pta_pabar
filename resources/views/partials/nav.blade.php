@@ -1,7 +1,7 @@
 @php
     $role = $authUser['role'] ?? '';
     $isSuperadmin = $role === 'superadmin';
-    $canMemberLoan = in_array($role, ['anggota', 'superadmin']);
+    $canMemberLoan = in_array($role, ['anggota', 'sekretaris', 'bendahara', 'bendahara_kantor', 'ketua', 'superadmin']);
     $canSecretary = in_array($role, ['sekretaris', 'superadmin']);
     $canTreasurer = in_array($role, ['bendahara', 'superadmin']);
     $canOfficeTreasurer = in_array($role, ['bendahara_kantor', 'superadmin']);
@@ -15,17 +15,34 @@
         || request()->routeIs('sekretaris.loans.*')
         || request()->routeIs('bendahara.loans.*')
         || request()->routeIs('ketua.loans.*');
+    $openMemberLoans = request()->routeIs('anggota.loans.*') || request()->routeIs('anggota.keuangan');
     $openManagement = request()->routeIs('users.*') || request()->routeIs('members.*') || request()->routeIs('invites.*');
     $openStore = request()->routeIs('products.*') || request()->routeIs('sales.*') || request()->routeIs('mart.balance.*');
     $openReports = request()->routeIs('reports.type') || request()->routeIs('reports.*');
 
     $pendingSecretaryLoans = $canSecretary ? DB::table('loans')->where('status', 'submitted')->count() : 0;
     $pendingCashEntries = $canSecretary ? DB::table('cash_entries')->where('status', 'pending')->count() : 0;
+    $pendingSecretarySettlements = $canSecretary
+        ? DB::table('loan_installment_payments as p')
+            ->join('users as creator', 'p.created_by', '=', 'creator.id')
+            ->where('p.is_settlement', 1)
+            ->where('p.status', 'pending')
+            ->where('creator.role', 'bendahara')
+            ->count()
+        : 0;
     $pendingTreasurerLoans = $canTreasurer ? DB::table('loans')->where('status', 'reviewed')->count() : 0;
     $pendingChairmanLoans = $canChairman ? DB::table('loans')->where('status', 'approved_treasurer')->count() : 0;
     $pendingDeductions = $canOfficeTreasurer ? DB::table('deduction_logs')->where('status', 'pending')->count() : 0;
     $pendingSettlements = $canTreasurer
-        ? DB::table('loan_installment_payments')->where('is_settlement', 1)->where('status', 'pending')->count()
+        ? DB::table('loan_installment_payments as p')
+            ->leftJoin('users as creator', 'p.created_by', '=', 'creator.id')
+            ->where('p.is_settlement', 1)
+            ->where('p.status', 'pending')
+            ->where(function ($query) {
+                $query->whereNull('creator.role')
+                    ->orWhere('creator.role', '!=', 'bendahara');
+            })
+            ->count()
         : 0;
     $pendingDisbursements = $canTreasurer
         ? DB::table('loans')->where('status', 'approved_chairman')->whereNull('transfer_evidence_path')->count()
@@ -74,6 +91,13 @@
                 <span>Review Sekretaris</span>
                 @if($pendingSecretaryLoans > 0)
                     <span class="nav-badge">{{ $pendingSecretaryLoans }}</span>
+                @endif
+            </a>
+            <a href="{{ route('sekretaris.loans.settlements') }}" class="nav-approval {{ $pendingSecretarySettlements > 0 ? 'nav-state--pending' : 'nav-state--ok' }} {{ request()->routeIs('sekretaris.loans.settlements*') ? 'active' : '' }}">
+                @include('partials.icon', ['name' => 'check'])
+                <span>Verifikasi Pelunasan</span>
+                @if($pendingSecretarySettlements > 0)
+                    <span class="nav-badge">{{ $pendingSecretarySettlements }}</span>
                 @endif
             </a>
             <a href="{{ route('saldo.index') }}" class="nav-approval {{ $pendingCashEntries > 0 ? 'nav-state--pending' : 'nav-state--ok' }} {{ request()->routeIs('saldo.*') ? 'active' : '' }}">
@@ -125,6 +149,33 @@
                 @endif
             </a>
         @endif
+    @endif
+
+    @if($role !== 'anggota' && $canMemberLoan)
+        <details class="nav-group" {{ $openMemberLoans ? 'open' : '' }}>
+            <summary class="nav-group-title">
+                @include('partials.icon', ['name' => 'file'])
+                <span>Peminjaman</span>
+            </summary>
+            <div class="nav-sub">
+                <a href="{{ route('anggota.loans.create') }}" class="{{ request()->routeIs('anggota.loans.create') ? 'active' : '' }}">
+                    @include('partials.icon', ['name' => 'plus'])
+                    <span>Ajukan Peminjaman</span>
+                </a>
+                <a href="{{ route('anggota.loans.index') }}" class="{{ request()->routeIs('anggota.loans.index') ? 'active' : '' }}">
+                    @include('partials.icon', ['name' => 'file'])
+                    <span>Pinjaman Saya</span>
+                </a>
+                <a href="{{ route('anggota.loans.payments') }}" class="{{ request()->routeIs('anggota.loans.payments*') ? 'active' : '' }}">
+                    @include('partials.icon', ['name' => 'wallet'])
+                    <span>Pembayaran Angsuran</span>
+                </a>
+                <a href="{{ route('anggota.keuangan') }}" class="{{ request()->routeIs('anggota.keuangan') ? 'active' : '' }}">
+                    @include('partials.icon', ['name' => 'coins'])
+                    <span>Rekap Simpanan & Pemotongan</span>
+                </a>
+            </div>
+        </details>
     @endif
 
     @if($role !== 'anggota')

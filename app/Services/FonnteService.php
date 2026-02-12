@@ -137,20 +137,67 @@ class FonnteService
             '',
             $recipientLine,
             '',
-            'Berikut informasi resmi dari Koperasi:',
+            'Dengan hormat,',
+            'Berikut pemberitahuan resmi dari Koperasi:',
+            '',
+            'Rincian:',
             '',
         ];
 
+        $hasFollowUpPoint = false;
         foreach ($points as $point) {
-            $lines[] = '- ' . $point;
+            $normalizedPoint = trim((string) $point);
+            $normalizedPoint = preg_replace('/^[^\\p{L}\\p{N}]+/u', '', $normalizedPoint) ?? $normalizedPoint;
+            if ($normalizedPoint === '') {
+                continue;
+            }
+            if (stripos($normalizedPoint, 'tindak lanjut') !== false) {
+                $hasFollowUpPoint = true;
+            }
+            $lines[] = $this->pointIcon($normalizedPoint) . ' ' . $normalizedPoint;
         }
 
+        if ($hasFollowUpPoint) {
+            $lines[] = '';
+            $lines[] = 'Mohon tindak lanjut sesuai kewenangan dan ketentuan yang berlaku.';
+        }
+        $lines[] = 'Demikian pemberitahuan ini disampaikan.';
         $lines[] = '';
-        $lines[] = 'Mohon segera ditindaklanjuti sesuai ketentuan yang berlaku.';
-        $lines[] = '';
-        $lines[] = 'Sekian dan terima kasih. ' . $closingEmoji;
+        $lines[] = 'Sekian dan terima kasih.';
 
         return implode("\n", $lines);
+    }
+
+    private function pointIcon(string $point): string
+    {
+        $text = mb_strtolower($point, 'UTF-8');
+
+        if (strpos($text, 'tindak lanjut') !== false || strpos($text, 'tautan') !== false || strpos($text, 'link') !== false) {
+            return '🔗';
+        }
+        if (strpos($text, 'nominal') !== false || strpos($text, 'jumlah') !== false || strpos($text, 'total') !== false) {
+            return '💰';
+        }
+        if (strpos($text, 'tanggal') !== false || strpos($text, 'periode') !== false) {
+            return '📅';
+        }
+        if (strpos($text, 'nama') !== false) {
+            return '👤';
+        }
+        if (strpos($text, 'no. anggota') !== false || strpos($text, 'nomor anggota') !== false) {
+            return '🆔';
+        }
+        if (strpos($text, 'detail') !== false || strpos($text, 'dokumen') !== false) {
+            return '📄';
+        }
+        if (strpos($text, 'angsuran') !== false || strpos($text, 'tenor') !== false) {
+            return '🔢';
+        }
+        if (strpos($text, 'status') !== false) {
+            return '📌';
+        }
+
+        return '✅';
     }
 }
 

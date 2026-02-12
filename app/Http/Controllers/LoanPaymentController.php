@@ -14,7 +14,8 @@ class LoanPaymentController extends Controller
     {
         $role = $request->session()->get('auth.role');
         $userId = $request->session()->get('auth.id');
-        $isMember = $role === 'anggota';
+        $isMemberPortal = $request->routeIs('anggota.*');
+        $isMember = $role === 'anggota' || $isMemberPortal;
         $search = trim((string) $request->query('q', ''));
         $statusFilter = $request->query('status');
         $serviceRate = (float) config('koperasi.service_fee_rate', 0);
@@ -63,12 +64,22 @@ class LoanPaymentController extends Controller
                 $paymentsByLoan[$payment->loan_id][] = $payment;
             }
 
-            $settlementRequests = DB::table('loan_installment_payments')
-                ->whereIn('loan_id', $loanIds)
-                ->where('is_settlement', 1)
-                ->orderByDesc('created_at')
-                ->get()
-                ->groupBy('loan_id');
+            $settlementRequestQuery = DB::table('loan_installment_payments as p')
+                ->leftJoin('users as creator', 'p.created_by', '=', 'creator.id')
+                ->select('p.*', 'creator.role as creator_role')
+                ->whereIn('p.loan_id', $loanIds)
+                ->where('p.is_settlement', 1)
+                ->orderByDesc('p.created_at');
+
+            if ($role === 'bendahara') {
+                // Pelunasan yang diinput bendahara diverifikasi sekretaris.
+                $settlementRequestQuery->where(function ($query) {
+                    $query->whereNull('creator.role')
+                        ->orWhere('creator.role', '!=', 'bendahara');
+                });
+            }
+
+            $settlementRequests = $settlementRequestQuery->get()->groupBy('loan_id');
         }
 
         $members = [];
@@ -316,6 +327,7 @@ class LoanPaymentController extends Controller
 
     public function store(Request $request)
     {
+        $isMemberPortal = $request->routeIs('anggota.*');
         $isSettlement = (bool) $request->input('is_settlement');
         $rules = [
             'loan_id' => 'required|exists:loans,id',
@@ -342,7 +354,7 @@ class LoanPaymentController extends Controller
 
         $role = $request->session()->get('auth.role');
         $userId = $request->session()->get('auth.id');
-        if ($role === 'anggota' && (int) $loan->user_id !== (int) $userId) {
+        if ($isMemberPortal && (int) $loan->user_id !== (int) $userId) {
             return back()
                 ->withErrors(['loan_id' => 'Pinjaman ini bukan milik Anda.'])
                 ->withInput();
@@ -364,9 +376,9 @@ class LoanPaymentController extends Controller
         }
 
         if ($isSettlement) {
-            if ($role !== 'anggota') {
+            if (!$isMemberPortal && $role !== 'bendahara') {
                 return back()
-                    ->withErrors(['is_settlement' => 'Pelunasan hanya bisa diajukan oleh anggota.'])
+                    ->withErrors(['is_settlement' => 'Pelunasan hanya bisa diajukan melalui menu anggota atau oleh bendahara.'])
                     ->withInput();
             }
 
@@ -420,25 +432,45 @@ class LoanPaymentController extends Controller
                 'updated_at' => now(),
             ]);
 
-            $member = DB::table('users')
-                ->select('name', 'member_no')
-                ->where('id', $loan->user_id)
-                ->first();
-            $memberLabel = ($member->name ?? 'Anggota') . ($member->member_no ? ' (' . $member->member_no . ')' : '');
-            $bendaharaLink = route('bendahara.loans.payments');
-            $totalAmount = $totalPrincipal + $totalFee;
-            $notifier = new FonnteService();
-            $notifier->notifyRole(
-                'bendahara',
-                $notifier->formatMessage([
-                    "🧾 Permohonan pelunasan pinjaman menunggu validasi bendahara.",
-                    "Nama: " . ($member->name ?? 'Anggota'),
-                    "No. Anggota: " . ($member->member_no ?? '-'),
-                    "Nominal: Rp " . number_format((float) $totalAmount, 2, ',', '.'),
-                    "Tanggal: {$payload['paid_at']}",
-                    "Tindak lanjut: {$bendaharaLink}",
-                ], '🤝')
-            );
+            if ($role === 'bendahara') {
+                $member = DB::table('users')
+                    ->select('name', 'member_no')
+                    ->where('id', $loan->user_id)
+                    ->first();
+                $sekretarisLink = route('sekretaris.loans.settlements');
+                $totalAmount = $totalPrincipal + $totalFee;
+                $notifier = new FonnteService();
+                $notifier->notifyRole(
+                    'sekretaris',
+                    $notifier->formatMessage([
+                        "Permohonan pelunasan pinjaman menunggu verifikasi sekretaris.",
+                        "Nama: " . ($member->name ?? 'Anggota'),
+                        "No. Anggota: " . ($member->member_no ?? '-'),
+                        "Nominal: Rp " . number_format((float) $totalAmount, 2, ',', '.'),
+                        "Tanggal: {$payload['paid_at']}",
+                        "Tindak lanjut: {$sekretarisLink}",
+                    ], 'ðŸ¤')
+                );
+            } elseif ($isMemberPortal) {
+                $member = DB::table('users')
+                    ->select('name', 'member_no')
+                    ->where('id', $loan->user_id)
+                    ->first();
+                $bendaharaLink = route('bendahara.loans.payments');
+                $totalAmount = $totalPrincipal + $totalFee;
+                $notifier = new FonnteService();
+                $notifier->notifyRole(
+                    'bendahara',
+                    $notifier->formatMessage([
+                        "ðŸ§¾ Permohonan pelunasan pinjaman menunggu validasi bendahara.",
+                        "Nama: " . ($member->name ?? 'Anggota'),
+                        "No. Anggota: " . ($member->member_no ?? '-'),
+                        "Nominal: Rp " . number_format((float) $totalAmount, 2, ',', '.'),
+                        "Tanggal: {$payload['paid_at']}",
+                        "Tindak lanjut: {$bendaharaLink}",
+                    ], 'ðŸ¤')
+                );
+            }
         } else {
             $installmentNo = (int) $payload['installment_no'];
             if ($installmentNo > (int) $loan->term_months) {
@@ -485,7 +517,7 @@ class LoanPaymentController extends Controller
                 'updated_at' => now(),
             ]);
 
-            if ($role === 'anggota') {
+            if ($isMemberPortal && $role !== 'bendahara') {
                 $member = DB::table('users')
                     ->select('name', 'member_no')
                     ->where('id', $loan->user_id)
@@ -496,14 +528,14 @@ class LoanPaymentController extends Controller
                 $notifier->notifyRole(
                     'bendahara',
                     $notifier->formatMessage([
-                        "💳 Pembayaran angsuran diinput oleh anggota.",
+                        "ðŸ’³ Pembayaran angsuran diinput oleh anggota.",
                         "Nama: " . ($member->name ?? 'Anggota'),
                         "No. Anggota: " . ($member->member_no ?? '-'),
                         "Angsuran Ke: {$installmentNo}",
                         "Nominal: Rp " . number_format((float) ($payload['amount_principal'] + $payload['amount_fee']), 2, ',', '.'),
                         "Tanggal: {$payload['paid_at']}",
                         "Tindak lanjut: {$bendaharaLink}",
-                    ], '🤝')
+                    ], 'ðŸ¤')
                 );
             }
         }
@@ -515,16 +547,49 @@ class LoanPaymentController extends Controller
         return redirect()
             ->route($redirectRoute, ['loan_id' => $payload['loan_id']])
             ->with('success', $isSettlement
-                ? 'Permohonan pelunasan berhasil dikirim. Menunggu validasi bendahara.'
+                ? ($role === 'bendahara'
+                    ? 'Permohonan pelunasan berhasil dicatat. Menunggu verifikasi sekretaris.'
+                    : 'Permohonan pelunasan berhasil dikirim. Menunggu validasi bendahara.')
                 : 'Pembayaran angsuran berhasil disimpan.');
+    }
+
+    public function secretarySettlements(Request $request)
+    {
+        $role = $request->session()->get('auth.role');
+        if (!in_array($role, ['sekretaris', 'superadmin'], true)) {
+            return redirect()->route('dashboard');
+        }
+
+        $settlements = DB::table('loan_installment_payments as p')
+            ->join('loans', 'p.loan_id', '=', 'loans.id')
+            ->join('users as anggota', 'loans.user_id', '=', 'anggota.id')
+            ->leftJoin('users as creator', 'p.created_by', '=', 'creator.id')
+            ->select(
+                'p.id',
+                'p.loan_id',
+                'p.paid_at',
+                'p.amount_principal',
+                'p.amount_fee',
+                'p.evidence_path',
+                'p.created_at',
+                'anggota.name as anggota_name',
+                'anggota.member_no',
+                'creator.name as creator_name'
+            )
+            ->where('p.is_settlement', 1)
+            ->where('p.status', 'pending')
+            ->where('creator.role', 'bendahara')
+            ->orderByDesc('p.created_at')
+            ->get();
+
+        return view('loans.sekretaris.settlements', [
+            'settlements' => $settlements,
+        ]);
     }
 
     public function approveSettlement(Request $request, $id)
     {
         $role = $request->session()->get('auth.role');
-        if ($role !== 'bendahara') {
-            return redirect()->route('bendahara.loans.payments');
-        }
 
         $settlement = DB::table('loan_installment_payments')
             ->where('id', $id)
@@ -532,16 +597,37 @@ class LoanPaymentController extends Controller
             ->where('status', 'pending')
             ->first();
 
+        $fallbackRoute = 'bendahara.loans.payments';
         if (!$settlement) {
             return redirect()
-                ->route('bendahara.loans.payments')
+                ->route($fallbackRoute)
                 ->with('error', 'Permohonan pelunasan tidak ditemukan.');
+        }
+
+        $creatorRole = null;
+        if (!empty($settlement->created_by)) {
+            $creatorRole = DB::table('users')
+                ->where('id', $settlement->created_by)
+                ->value('role');
+        }
+
+        $requiresSecretary = $creatorRole === 'bendahara';
+        $targetRoute = $requiresSecretary ? 'sekretaris.loans.settlements' : 'bendahara.loans.payments';
+
+        if ($requiresSecretary) {
+            if (!in_array($role, ['sekretaris', 'superadmin'], true)) {
+                return redirect()->route($targetRoute);
+            }
+        } else {
+            if (!in_array($role, ['bendahara', 'superadmin'], true)) {
+                return redirect()->route($targetRoute);
+            }
         }
 
         $loan = DB::table('loans')->where('id', $settlement->loan_id)->first();
         if (!$loan || $loan->status !== 'approved_chairman') {
             return redirect()
-                ->route('bendahara.loans.payments')
+                ->route($targetRoute)
                 ->with('error', 'Pinjaman tidak valid untuk pelunasan.');
         }
 
@@ -601,20 +687,11 @@ class LoanPaymentController extends Controller
                 ]);
             }
 
-            $loanOrderIds = DB::table('loans')
-                ->where('user_id', $loan->user_id)
-                ->orderBy('created_at')
-                ->orderBy('id')
-                ->pluck('id')
-                ->all();
-            $loanSequence = array_search($loan->id, $loanOrderIds, true);
-            $sequenceLabel = $loanSequence !== false ? $loanSequence + 1 : $loan->id;
-
             if ($totalAmount > 0) {
                 DB::table('cash_entries')->insert([
                     'entry_date' => $paidAt,
                     'direction' => 'in',
-                    'description' => 'Pelunasan pinjaman ke-' . $sequenceLabel . ' (' . ($member->name ?? 'Anggota') . ')',
+                    'description' => 'Pelunasan Angsuran (' . ($member->name ?? 'Anggota') . ')',
                     'amount' => $totalAmount,
                     'category' => 'pelunasan',
                     'user_id' => $loan->user_id,
@@ -637,11 +714,12 @@ class LoanPaymentController extends Controller
         });
 
         $memberLink = route('anggota.loans.payments');
+        $verifierLabel = $requiresSecretary ? 'sekretaris' : 'bendahara';
         $notifier = new FonnteService();
         $notifier->notifyUser(
             $loan->user_id,
             $notifier->formatMessage([
-                "✅ Pelunasan pinjaman Anda telah diverifikasi bendahara.",
+                "Pelunasan pinjaman Anda telah diverifikasi {$verifierLabel}.",
                 "Nominal: Rp " . number_format((float) $totalAmount, 2, ',', '.'),
                 "Tanggal: {$settlement->paid_at}",
                 "Detail: {$memberLink}",
@@ -649,7 +727,7 @@ class LoanPaymentController extends Controller
         );
 
         return redirect()
-            ->route('bendahara.loans.payments')
+            ->route($targetRoute)
             ->with('success', 'Pelunasan berhasil divalidasi.');
     }
 

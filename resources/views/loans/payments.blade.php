@@ -328,7 +328,7 @@
                         <option value="">-- Pilih --</option>
                     </select>
                 </div>
-                @if($isMember)
+                @if($isMember || $role === 'bendahara')
                     <div class="form-control">
                         <label class="checkbox">
                             <input type="checkbox" name="is_settlement" id="modal-is-settlement" value="1" @if(old('is_settlement')) checked @endif>
