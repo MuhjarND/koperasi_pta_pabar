@@ -101,6 +101,30 @@ class ProductController extends Controller
             ->with('success', 'Produk berhasil diperbarui.');
     }
 
+    public function addStock(Request $request, $id)
+    {
+        $payload = $request->validate([
+            'stock_add' => 'required|integer|min:1',
+        ]);
+
+        $updated = DB::table('products')
+            ->where('id', $id)
+            ->update([
+                'stock' => DB::raw('stock + ' . (int) $payload['stock_add']),
+                'updated_at' => now(),
+            ]);
+
+        if (!$updated) {
+            return redirect()
+                ->route('products.index')
+                ->withErrors(['stock_add' => 'Produk tidak ditemukan.']);
+        }
+
+        return redirect()
+            ->route('products.index')
+            ->with('success', 'Stok produk berhasil ditambahkan.');
+    }
+
     public function report(Request $request)
     {
         $products = DB::table('products')

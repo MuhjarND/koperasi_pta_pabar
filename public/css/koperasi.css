@@ -997,6 +997,12 @@ body {
   gap: 16px;
 }
 
+.form-inline-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .form-control {
   display: grid;
   gap: 8px;
@@ -1260,6 +1266,29 @@ input[type="file"]::-webkit-file-upload-button:hover {
 
 .auth-card > * {
   position: relative;
+}
+
+.auth-card--login::before {
+  background:
+    linear-gradient(135deg, rgba(26, 127, 100, 0.1), rgba(245, 158, 11, 0.08)),
+    url("/logo_koperasi.png");
+  background-repeat: no-repeat, no-repeat;
+  background-position: center, center;
+  background-size: cover, 220px;
+  opacity: 1;
+}
+
+.auth-card--login::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.9);
+  pointer-events: none;
+}
+
+.auth-card--login > * {
+  position: relative;
+  z-index: 1;
 }
 
 .auth-card .btn {
@@ -1592,6 +1621,10 @@ input[type="file"]::-webkit-file-upload-button:hover {
   }
 
   .grid-two {
+    grid-template-columns: 1fr;
+  }
+
+  .form-inline-two {
     grid-template-columns: 1fr;
   }
 

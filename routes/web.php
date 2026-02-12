@@ -126,6 +126,7 @@ Route::middleware(['session.auth'])->group(function () {
         Route::post('/', [ProductController::class, 'store'])->name('products.store');
         Route::get('/{id}/edit', [ProductController::class, 'edit'])->name('products.edit');
         Route::post('/{id}', [ProductController::class, 'update'])->name('products.update');
+        Route::post('/{id}/stock', [ProductController::class, 'addStock'])->name('products.stock');
     });
 
     Route::get('/koperasi-mart/saldo', [MartBalanceController::class, 'index'])

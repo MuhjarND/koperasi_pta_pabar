@@ -1,15 +1,12 @@
 @extends('layouts.guest')
 
 @section('content')
-    <div class="auth-card">
-        <div class="auth-logo">
-            <img src="{{ asset('logo_koperasi.png') }}" alt="Logo Koperasi">
-        </div>
+    <div class="auth-card auth-card--login">
         <h1 class="auth-title">
             @include('partials.icon', ['name' => 'user'])
             Masuk Koperasi Digital
         </h1>
-        <p class="auth-subtitle">Kelola pinjaman dengan alur persetujuan yang jelas.</p>
+        <p class="auth-subtitle">Solusi koperasi modern untuk kemudahan simpan pinjam yang cepat, aman, dan teratur.</p>
 
         @if($errors->any())
             <div class="alert danger">
@@ -30,8 +27,5 @@
             <button class="btn btn-primary" type="submit">Masuk</button>
         </form>
 
-        <div class="auth-meta">
-            Gunakan akun demo: superadmin@koperasi.test / koperasi123
-        </div>
     </div>
 @endsection

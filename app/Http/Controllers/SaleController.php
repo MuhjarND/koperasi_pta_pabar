@@ -11,12 +11,24 @@ class SaleController extends Controller
     {
         $sales = DB::table('sales')
             ->leftJoin('users', 'sales.cashier_id', '=', 'users.id')
+            ->leftJoin('sale_items as si', 'sales.id', '=', 'si.sale_id')
+            ->leftJoin('products as p', 'si.product_id', '=', 'p.id')
             ->select(
                 'sales.id',
                 'sales.buyer_name',
                 'sales.total_amount',
                 'sales.created_at',
-                'users.name as cashier_name'
+                'users.name as cashier_name',
+                DB::raw('coalesce(sum(si.qty), 0) as total_qty'),
+                DB::raw("group_concat(distinct coalesce(p.name, 'Produk') order by p.name separator ', ') as items_summary"),
+                DB::raw('coalesce(sum((si.price - coalesce(p.modal, 0)) * si.qty), 0) as profit_amount')
+            )
+            ->groupBy(
+                'sales.id',
+                'sales.buyer_name',
+                'sales.total_amount',
+                'sales.created_at',
+                'users.name'
             )
             ->orderByDesc('sales.created_at')
             ->get();

@@ -21,13 +21,15 @@
                 <label>Unit</label>
                 <input type="text" name="unit" value="{{ old('unit', 'pcs') }}">
             </div>
-            <div class="form-control">
-                <label>Harga</label>
-                <input type="number" name="price" min="0" step="100" value="{{ old('price') }}" required>
-            </div>
-            <div class="form-control">
-                <label>Modal (Per Unit)</label>
-                <input type="number" name="modal" min="0" step="100" value="{{ old('modal') }}" required>
+            <div class="form-inline-two">
+                <div class="form-control">
+                    <label>Harga</label>
+                    <input type="number" name="price" min="0" step="100" value="{{ old('price') }}" required>
+                </div>
+                <div class="form-control">
+                    <label>Modal (Per Unit)</label>
+                    <input type="number" name="modal" min="0" step="100" value="{{ old('modal') }}" required>
+                </div>
             </div>
             <div class="form-control">
                 <label>Stok</label>

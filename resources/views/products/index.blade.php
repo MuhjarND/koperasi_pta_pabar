@@ -87,6 +87,13 @@
                         <td>{{ $product->stock }}</td>
                         <td>{{ $product->unit }}</td>
                         <td>
+                            <button class="btn btn-primary"
+                                type="button"
+                                data-stock-product
+                                data-id="{{ $product->id }}"
+                                data-name="{{ $product->name }}">
+                                Tambah Stok
+                            </button>
                             <button class="btn btn-ghost"
                                 type="button"
                                 data-edit-product
@@ -124,6 +131,29 @@
         </div>
     </dialog>
 
+    <dialog class="modal" id="product-stock-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div>
+                    <h3>Tambah Stok Produk</h3>
+                    <p class="muted">Tambahkan stok untuk produk <strong data-stock-product-name>-</strong>.</p>
+                </div>
+                <button class="btn btn-ghost" type="button" data-modal-close-stock>Keluar</button>
+            </div>
+            <form method="post" action="#" class="form-grid" data-stock-form>
+                @csrf
+                <div class="form-control">
+                    <label>Jumlah Tambahan Stok</label>
+                    <input type="number" name="stock_add" min="1" step="1" required>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn btn-ghost" type="button" data-modal-close-stock>Batal</button>
+                    <button class="btn btn-primary" type="submit">Simpan Stok</button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+
     <dialog class="modal" id="product-modal">
         <div class="modal-card">
             <div class="modal-header">
@@ -140,20 +170,18 @@
                     <input type="text" name="name" required>
                 </div>
                 <div class="form-control">
-                    <label>SKU</label>
-                    <input type="text" name="sku">
-                </div>
-                <div class="form-control">
                     <label>Unit</label>
                     <input type="text" name="unit" value="pcs">
                 </div>
-                <div class="form-control">
-                    <label>Harga</label>
-                    <input type="number" name="price" min="0" step="100" required>
-                </div>
-                <div class="form-control">
-                    <label>Modal (Per Unit)</label>
-                    <input type="number" name="modal" min="0" step="100" required>
+                <div class="form-inline-two">
+                    <div class="form-control">
+                        <label>Harga</label>
+                        <input type="number" name="price" min="0" step="100" required>
+                    </div>
+                    <div class="form-control">
+                        <label>Modal (Per Unit)</label>
+                        <input type="number" name="modal" min="0" step="100" required>
+                    </div>
                 </div>
                 <div class="form-control">
                     <label>Stok</label>
@@ -182,7 +210,6 @@
             </div>
             <form method="post" action="#" class="form-grid" data-edit-form>
                 @csrf
-                @method('put')
                 <div class="form-control">
                     <label>Nama Produk</label>
                     <input type="text" name="name" data-edit-name required>
@@ -195,13 +222,15 @@
                     <label>Unit</label>
                     <input type="text" name="unit" data-edit-unit>
                 </div>
-                <div class="form-control">
-                    <label>Harga</label>
-                    <input type="number" name="price" min="0" step="100" data-edit-price required>
-                </div>
-                <div class="form-control">
-                    <label>Modal (Per Unit)</label>
-                    <input type="number" name="modal" min="0" step="100" data-edit-modal required>
+                <div class="form-inline-two">
+                    <div class="form-control">
+                        <label>Harga</label>
+                        <input type="number" name="price" min="0" step="100" data-edit-price required>
+                    </div>
+                    <div class="form-control">
+                        <label>Modal (Per Unit)</label>
+                        <input type="number" name="modal" min="0" step="100" data-edit-modal required>
+                    </div>
                 </div>
                 <div class="form-control">
                     <label>Stok</label>
@@ -223,14 +252,19 @@
         (function () {
             const createModal = document.getElementById('product-modal');
             const editModal = document.getElementById('product-edit-modal');
+            const stockModal = document.getElementById('product-stock-modal');
             const reportModal = document.getElementById('product-report-modal');
             const openButtons = document.querySelectorAll('[data-modal-open="product-modal"]');
             const closeButtons = createModal ? createModal.querySelectorAll('[data-modal-close]') : [];
             const closeEditButtons = editModal ? editModal.querySelectorAll('[data-modal-close-edit]') : [];
+            const closeStockButtons = stockModal ? stockModal.querySelectorAll('[data-modal-close-stock]') : [];
             const reportButtons = document.querySelectorAll('[data-modal-open="product-report-modal"]');
             const closeReportButtons = reportModal ? reportModal.querySelectorAll('[data-modal-close-report]') : [];
             const editButtons = document.querySelectorAll('[data-edit-product]');
+            const stockButtons = document.querySelectorAll('[data-stock-product]');
             const editForm = editModal ? editModal.querySelector('[data-edit-form]') : null;
+            const stockForm = stockModal ? stockModal.querySelector('[data-stock-form]') : null;
+            const stockProductName = stockModal ? stockModal.querySelector('[data-stock-product-name]') : null;
 
             const openModal = (modal) => {
                 if (!modal) {
@@ -257,6 +291,7 @@
             openButtons.forEach((btn) => btn.addEventListener('click', () => openModal(createModal)));
             closeButtons.forEach((btn) => btn.addEventListener('click', () => closeModal(createModal)));
             closeEditButtons.forEach((btn) => btn.addEventListener('click', () => closeModal(editModal)));
+            closeStockButtons.forEach((btn) => btn.addEventListener('click', () => closeModal(stockModal)));
             reportButtons.forEach((btn) => btn.addEventListener('click', () => openModal(reportModal)));
             closeReportButtons.forEach((btn) => btn.addEventListener('click', () => closeModal(reportModal)));
 
@@ -272,6 +307,14 @@
                 editModal.addEventListener('click', (event) => {
                     if (event.target === editModal) {
                         closeModal(editModal);
+                    }
+                });
+            }
+
+            if (stockModal) {
+                stockModal.addEventListener('click', (event) => {
+                    if (event.target === stockModal) {
+                        closeModal(stockModal);
                     }
                 });
             }
@@ -299,6 +342,25 @@
                     editForm.querySelector('[data-edit-stock]').value = btn.getAttribute('data-stock') || 0;
                     editForm.querySelector('[data-edit-description]').value = btn.getAttribute('data-description') || '';
                     openModal(editModal);
+                });
+            });
+
+            stockButtons.forEach((btn) => {
+                btn.addEventListener('click', () => {
+                    if (!stockForm) {
+                        return;
+                    }
+                    const id = btn.getAttribute('data-id');
+                    const name = btn.getAttribute('data-name') || '-';
+                    stockForm.action = "{{ url('produk') }}/" + id + "/stock";
+                    if (stockProductName) {
+                        stockProductName.textContent = name;
+                    }
+                    const input = stockForm.querySelector('input[name="stock_add"]');
+                    if (input) {
+                        input.value = '';
+                    }
+                    openModal(stockModal);
                 });
             });
         })();

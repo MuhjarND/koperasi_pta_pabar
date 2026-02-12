@@ -20,7 +20,10 @@
                 <tr>
                     <th>ID</th>
                     <th>Pembeli</th>
+                    <th>Item Dibeli</th>
+                    <th>Jumlah Dibeli</th>
                     <th>Total</th>
+                    <th>Laba</th>
                     <th>Kasir</th>
                     <th>Tanggal</th>
                 </tr>
@@ -30,13 +33,16 @@
                     <tr>
                         <td>#{{ $sale->id }}</td>
                         <td>{{ $sale->buyer_name ?? '-' }}</td>
+                        <td>{{ $sale->items_summary ?? '-' }}</td>
+                        <td>{{ (int) ($sale->total_qty ?? 0) }}</td>
                         <td>Rp {{ number_format($sale->total_amount, 2, ',', '.') }}</td>
+                        <td>Rp {{ number_format($sale->profit_amount ?? 0, 2, ',', '.') }}</td>
                         <td>{{ $sale->cashier_name ?? '-' }}</td>
                         <td>{{ $sale->created_at }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="5">Belum ada transaksi penjualan.</td>
+                        <td colspan="8">Belum ada transaksi penjualan.</td>
                     </tr>
                 @endforelse
             </tbody>

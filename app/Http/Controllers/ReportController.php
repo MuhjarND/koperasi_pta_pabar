@@ -245,7 +245,6 @@ class ReportController extends Controller
 
         $members = DB::table('users')
             ->select('id', 'name')
-            ->where('role', 'anggota')
             ->orderBy('name')
             ->get();
 

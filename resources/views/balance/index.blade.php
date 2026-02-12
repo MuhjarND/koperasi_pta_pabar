@@ -162,7 +162,6 @@
                     <th>Pengeluaran</th>
                     <th>Bukti</th>
                     <th>Saldo</th>
-                    <th>Ket</th>
                 </tr>
             </thead>
             <tbody>
@@ -304,11 +303,10 @@
                             <span class="saldo-indicator {{ $directionClass }}">{!! $directionIcon !!}</span>
                             Rp {{ number_format($row['balance'], 2, ',', '.') }}
                         </td>
-                        <td>{{ $row['note'] }}</td>
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="8">Belum ada transaksi.</td>
+                        <td colspan="7">Belum ada transaksi.</td>
                     </tr>
                 @endforelse
             </tbody>
