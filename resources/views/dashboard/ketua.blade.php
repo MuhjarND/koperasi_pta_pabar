@@ -5,7 +5,7 @@
 
 @section('content')
     <div class="stat-grid">
-        <div class="stat">
+        <div class="stat stat--balance">
             <div class="stat-icon">
                 @include('partials.icon', ['name' => 'wallet'])
             </div>

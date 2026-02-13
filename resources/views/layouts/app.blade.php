@@ -11,11 +11,16 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="sidebar-card">
-                <div class="brand">
-                    <img src="{{ asset('logo_koperasi.png') }}" alt="Logo Koperasi" class="brand-logo">
-                    <div class="brand-text">
-                        <span>Koperasi</span><span>Digital</span>
+                <div class="sidebar-head">
+                    <div class="brand">
+                        <img src="{{ asset('logo_koperasi.png') }}" alt="Logo Koperasi" class="brand-logo">
+                        <div class="brand-text">
+                            <span>Koperasi</span><span>Digital</span>
+                        </div>
                     </div>
+                    <button class="icon-button sidebar-icon-toggle" type="button" id="sidebar-toggle" aria-pressed="false" title="Sembunyikan/Tampilkan Menu">
+                        @include('partials.icon', ['name' => 'menu'])
+                    </button>
                 </div>
                 @include('partials.nav')
                 <div class="sidebar-footer">
@@ -129,6 +134,36 @@
                 if (event.target === menu) {
                     closeMenu();
                 }
+            });
+        })();
+    </script>
+
+    <script>
+        (function () {
+            var toggleButton = document.getElementById('sidebar-toggle');
+            if (!toggleButton) {
+                return;
+            }
+
+            var storageKey = 'koperasiSidebarCollapsed';
+
+            function updateButtonState() {
+                var collapsed = document.body.classList.contains('sidebar-collapsed');
+                toggleButton.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+                toggleButton.setAttribute('title', collapsed ? 'Tampilkan Menu' : 'Sembunyikan Menu');
+            }
+
+            if (window.localStorage && localStorage.getItem(storageKey) === '1') {
+                document.body.classList.add('sidebar-collapsed');
+            }
+            updateButtonState();
+
+            toggleButton.addEventListener('click', function () {
+                document.body.classList.toggle('sidebar-collapsed');
+                if (window.localStorage) {
+                    localStorage.setItem(storageKey, document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
+                }
+                updateButtonState();
             });
         })();
     </script>

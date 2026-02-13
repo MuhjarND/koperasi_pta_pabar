@@ -12,7 +12,7 @@
                     <h3>Saldo Koperasi</h3>
                 </div>
             </div>
-            <div class="stat">
+            <div class="stat stat--balance">
                 <div class="stat-icon">
                     @include('partials.icon', ['name' => 'wallet'])
                 </div>

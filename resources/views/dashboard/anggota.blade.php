@@ -9,7 +9,7 @@
     @endphp
 
     <div class="stat-grid">
-        <div class="stat stat--mint">
+        <div class="stat stat--balance">
             <div class="stat-icon">
                 @include('partials.icon', ['name' => 'wallet'])
             </div>
