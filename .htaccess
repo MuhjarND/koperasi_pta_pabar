@@ -1,0 +1,9 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Arahkan semua request domain utama ke folder public Laravel.
+    # Kondisi ini mencegah loop rewrite ketika URI sudah mengandung /public/.
+    RewriteCond %{REQUEST_URI} !/public/ [NC]
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+

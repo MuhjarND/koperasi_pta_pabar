@@ -11,6 +11,12 @@ class BalanceController extends Controller
 {
     public function index(Request $request)
     {
+        if (($request->session()->get('auth.role') ?? '') === 'anggota') {
+            return redirect()
+                ->route('dashboard')
+                ->withErrors(['error' => 'Halaman saldo koperasi tidak dapat diakses oleh anggota.']);
+        }
+
         $savings = 0;
         $loanReceipts = DB::table('loan_installment_payments')
             ->where('status', 'approved')
@@ -99,6 +105,12 @@ class BalanceController extends Controller
 
     public function export(Request $request)
     {
+        if (($request->session()->get('auth.role') ?? '') === 'anggota') {
+            return redirect()
+                ->route('dashboard')
+                ->withErrors(['error' => 'Export arus kas tidak dapat diakses oleh anggota.']);
+        }
+
         $month = (int) $request->query('month', now()->month);
         $year = (int) $request->query('year', now()->year);
         $types = config('koperasi.savings_types');

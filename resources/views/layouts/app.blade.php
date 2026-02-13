@@ -28,25 +28,26 @@
             @php
                 $twoFactorActive = !empty($authUser['two_factor_enabled']);
             @endphp
-            <div class="page-header">
-                <div class="page-title">
-                    <h1>@yield('title')</h1>
-                    <p>@yield('subtitle')</p>
+            <div class="top-user-strip">
+                <div class="top-user-meta">
+                    <div class="top-user-role">{{ config('koperasi.roles.' . ($authUser['role'] ?? '')) }}</div>
+                    <div class="top-user-name">{{ $authUser['name'] ?? 'User' }}</div>
                 </div>
-                <div class="user-actions">
+                <div class="top-user-actions">
                     <a class="icon-button icon-button--qr {{ $twoFactorActive ? 'icon-button--ok' : 'icon-button--alert' }}" href="{{ route('authenticator.setup') }}" title="Authenticator">
                         @include('partials.icon', ['name' => 'qr'])
                     </a>
-                    <div class="user-pill">
-                        <div>
-                            <div class="user-role">{{ config('koperasi.roles.' . ($authUser['role'] ?? '')) }}</div>
-                            <div>{{ $authUser['name'] ?? 'User' }}</div>
-                        </div>
-                        <form method="post" action="{{ route('logout') }}">
-                            @csrf
-                            <button class="btn btn-ghost" type="submit">Keluar</button>
-                        </form>
-                    </div>
+                    <form method="post" action="{{ route('logout') }}">
+                        @csrf
+                        <button class="btn btn-ghost btn-logout" type="submit">Keluar</button>
+                    </form>
+                </div>
+            </div>
+            <div class="page-header page-header--friendly">
+                <div class="page-title">
+                    <div class="page-kicker">Selamat datang</div>
+                    <h1>@yield('title')</h1>
+                    <p>@yield('subtitle')</p>
                 </div>
             </div>
 
@@ -69,10 +70,16 @@
             @include('partials.icon', ['name' => 'dashboard'])
             <span>Dashboard</span>
         </a>
-        <a href="{{ route('saldo.index') }}" class="{{ request()->routeIs('saldo.*') ? 'active' : '' }}">
-            @include('partials.icon', ['name' => 'wallet'])
-            <span>Saldo</span>
-        </a>
+        @if(($authUser['role'] ?? '') === 'anggota')
+            <a href="{{ route('anggota.loans.create') }}" class="mobile-tab-plus {{ request()->routeIs('anggota.loans.create') ? 'active' : '' }}" aria-label="Ajukan Peminjaman">
+                <span class="mobile-tab-plus-symbol" aria-hidden="true">+</span>
+            </a>
+        @else
+            <a href="{{ route('saldo.index') }}" class="{{ request()->routeIs('saldo.*') ? 'active' : '' }}">
+                @include('partials.icon', ['name' => 'wallet'])
+                <span>Saldo</span>
+            </a>
+        @endif
         <button type="button" class="mobile-tab-button" id="mobile-menu-toggle">
             @include('partials.icon', ['name' => 'clipboard'])
             <span>Menu</span>

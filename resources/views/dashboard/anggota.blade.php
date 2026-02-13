@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Dashboard Anggota')
-@section('subtitle', 'Pantau status pengajuan dan ajukan pinjaman baru.')
+@section('subtitle', 'Pantau simpanan dan angsuran Anda, serta ajukan pinjaman baru.')
 
 @section('content')
     @php
@@ -9,33 +9,13 @@
     @endphp
 
     <div class="stat-grid">
-        <div class="stat">
+        <div class="stat stat--mint">
             <div class="stat-icon">
                 @include('partials.icon', ['name' => 'wallet'])
             </div>
             <div>
                 <div>Saldo Koperasi</div>
                 <div class="value">Rp {{ number_format($balance, 2, ',', '.') }}</div>
-            </div>
-        </div>
-        <div class="stat">
-            <div class="stat-icon">
-                @include('partials.icon', ['name' => 'file'])
-            </div>
-            <div>
-                <div>Total Pengajuan</div>
-                <div class="value">{{ $totalLoans }}</div>
-            </div>
-        </div>
-        <div class="stat">
-            <div class="stat-icon">
-                @include('partials.icon', ['name' => 'plus'])
-            </div>
-            <div>
-                <div>Ajukan Pinjaman Baru</div>
-                <div class="action-row">
-                    <a class="btn btn-primary" href="{{ route('anggota.loans.create') }}">Buat Pengajuan</a>
-                </div>
             </div>
         </div>
     </div>
