@@ -1183,6 +1183,49 @@ body {
   background: #fff;
 }
 
+.password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-field input {
+  width: 100%;
+  padding-right: 46px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(20, 23, 28, 0.14);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s ease;
+}
+
+.password-toggle .icon {
+  width: 14px;
+  height: 14px;
+  background: transparent;
+}
+
+.password-toggle:hover,
+.password-toggle.active {
+  color: var(--accent-strong);
+  border-color: rgba(26, 127, 100, 0.3);
+  background: rgba(26, 127, 100, 0.08);
+}
+
 .form-control input:focus,
 .form-control textarea:focus,
 .form-control select:focus {
@@ -1380,6 +1423,12 @@ input[type="file"]::-webkit-file-upload-button:hover {
   background: rgba(26, 127, 100, 0.16);
   color: #15803d;
   border-color: rgba(26, 127, 100, 0.3);
+}
+
+.alert.warning {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.3);
 }
 
 .alert.danger {

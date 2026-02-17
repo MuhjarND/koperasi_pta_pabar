@@ -50,7 +50,12 @@
             </div>
             <div class="form-control">
                 <label>Password Baru (opsional)</label>
-                <input type="password" name="password" placeholder="Kosongkan jika tidak diubah">
+                <div class="password-field">
+                    <input type="password" name="password" placeholder="Kosongkan jika tidak diubah">
+                    <button type="button" class="password-toggle" aria-label="Tampilkan password">
+                        @include('partials.icon', ['name' => 'eye'])
+                    </button>
+                </div>
             </div>
             <button class="btn btn-primary" type="submit">Simpan Perubahan</button>
         </form>

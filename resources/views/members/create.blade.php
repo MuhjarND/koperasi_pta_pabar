@@ -47,7 +47,12 @@
             </div>
             <div class="form-control">
                 <label>Password (opsional)</label>
-                <input type="password" name="password" placeholder="Default: koperasi123">
+                <div class="password-field">
+                    <input type="password" name="password" placeholder="Default: koperasi123">
+                    <button type="button" class="password-toggle" aria-label="Tampilkan password">
+                        @include('partials.icon', ['name' => 'eye'])
+                    </button>
+                </div>
             </div>
             <button class="btn btn-primary" type="submit">Simpan</button>
         </form>

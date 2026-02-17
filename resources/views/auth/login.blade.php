@@ -22,7 +22,12 @@
             </div>
             <div class="form-control">
                 <label>Password</label>
-                <input type="password" name="password" placeholder="********" required>
+                <div class="password-field">
+                    <input type="password" name="password" placeholder="********" required>
+                    <button type="button" class="password-toggle" aria-label="Tampilkan password">
+                        @include('partials.icon', ['name' => 'eye'])
+                    </button>
+                </div>
             </div>
             <button class="btn btn-primary" type="submit">Masuk</button>
         </form>

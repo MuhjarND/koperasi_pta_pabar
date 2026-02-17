@@ -30,11 +30,21 @@
                 <p class="muted">Nomor anggota dibuat otomatis sesuai urutan pendaftaran.</p>
                 <div class="form-control">
                     <label>Password</label>
-                    <input type="password" name="password" required>
+                    <div class="password-field">
+                        <input type="password" name="password" required>
+                        <button type="button" class="password-toggle" aria-label="Tampilkan password">
+                            @include('partials.icon', ['name' => 'eye'])
+                        </button>
+                    </div>
                 </div>
                 <div class="form-control">
                     <label>Ulangi Password</label>
-                    <input type="password" name="password_confirmation" required>
+                    <div class="password-field">
+                        <input type="password" name="password_confirmation" required>
+                        <button type="button" class="password-toggle" aria-label="Tampilkan password">
+                            @include('partials.icon', ['name' => 'eye'])
+                        </button>
+                    </div>
                 </div>
                 <button class="btn btn-primary" type="submit">Daftar</button>
             </form>

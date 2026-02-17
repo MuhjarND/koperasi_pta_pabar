@@ -244,5 +244,28 @@
             });
         })();
     </script>
+
+    <script>
+        (function () {
+            var toggles = document.querySelectorAll('.password-toggle');
+            toggles.forEach(function (button) {
+                var wrapper = button.closest('.password-field');
+                if (!wrapper) {
+                    return;
+                }
+                var input = wrapper.querySelector('input');
+                if (!input) {
+                    return;
+                }
+
+                button.addEventListener('click', function () {
+                    var show = input.type === 'password';
+                    input.type = show ? 'text' : 'password';
+                    button.classList.toggle('active', show);
+                    button.setAttribute('aria-label', show ? 'Sembunyikan password' : 'Tampilkan password');
+                });
+            });
+        })();
+    </script>
 </body>
 </html>

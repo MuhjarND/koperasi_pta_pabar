@@ -8,78 +8,87 @@
         $feeRate = config('koperasi.service_fee_rate');
     @endphp
 
-    <div class="grid-two">
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">
-                    <div class="card-icon">@include('partials.icon', ['name' => 'file'])</div>
-                    <h3>Data Pinjaman</h3>
-                </div>
-            </div>
-            @if($errors->has('profile'))
-                <div class="alert danger">{{ $errors->first('profile') }}</div>
-            @endif
-            <form method="post" action="{{ route('anggota.loans.store') }}" class="form-grid" enctype="multipart/form-data">
-                @csrf
-                <h3>Detail Pinjaman</h3>
-                <div class="form-control">
-                    <label>Nominal Pinjaman</label>
-                    <input id="loan-amount" type="number" name="amount" min="1000" step="500" value="{{ old('amount') }}" required>
-                </div>
-                <div class="form-control">
-                    <label>Jangka Waktu (bulan)</label>
-                    <input id="loan-term" type="number" name="term_months" min="1" max="60" value="{{ old('term_months') }}" required>
-                </div>
-                <div class="form-control">
-                    <label>Tujuan Pinjaman</label>
-                    <textarea name="purpose" placeholder="Contoh: Modal usaha / Kebutuhan keluarga" required>{{ old('purpose') }}</textarea>
-                </div>
-                <div class="form-control">
-                    <label>Selfie untuk Validasi</label>
-                    <div class="selfie-wrap">
-                        <video id="selfie-video" class="selfie-video" autoplay playsinline muted></video>
-                        <button class="btn btn-ghost" type="button" id="selfie-capture">Ambil Foto</button>
-                        <input type="hidden" name="selfie_data" id="selfie-data" required>
+    <form id="loan-application-form" method="post" action="{{ route('anggota.loans.store') }}" enctype="multipart/form-data">
+        @csrf
+        <div class="grid-two">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon">@include('partials.icon', ['name' => 'file'])</div>
+                        <h3>Data Pinjaman</h3>
                     </div>
-                    <div class="image-preview" id="selfie-preview">Belum ada foto</div>
-                    <small class="muted" id="selfie-status">Klik "Ambil Foto" untuk mengaktifkan kamera.</small>
                 </div>
-                <button class="btn btn-primary" type="submit" @if(!$profileComplete) disabled @endif>Kirim Pengajuan</button>
-            </form>
-        </div>
-
-        <div class="card">
-            <div class="card-header">
-                <div class="card-title">
-                    <div class="card-icon">@include('partials.icon', ['name' => 'chart'])</div>
-                    <h3>Ringkasan Perhitungan</h3>
+                @if($errors->has('profile'))
+                    <div class="alert danger">{{ $errors->first('profile') }}</div>
+                @endif
+                @if(!$profileComplete)
+                    <div class="alert warning">
+                        Profil belum lengkap. Pengajuan tetap bisa dikirim, namun sebaiknya lengkapi data profil agar dokumen lebih akurat.
+                    </div>
+                @endif
+                <div class="form-grid">
+                    <h3>Detail Pinjaman</h3>
+                    <div class="form-control">
+                        <label>Nominal Pinjaman</label>
+                        <input id="loan-amount" type="number" name="amount" min="1000" step="500" value="{{ old('amount') }}" required>
+                    </div>
+                    <div class="form-control">
+                        <label>Jangka Waktu (bulan)</label>
+                        <input id="loan-term" type="number" name="term_months" min="1" max="60" value="{{ old('term_months') }}" required>
+                    </div>
+                    <div class="form-control">
+                        <label>Tujuan Pinjaman</label>
+                        <textarea name="purpose" placeholder="Contoh: Modal usaha / Kebutuhan keluarga" required>{{ old('purpose') }}</textarea>
+                    </div>
+                    <div class="form-control">
+                        <label>Selfie untuk Validasi</label>
+                        <div class="selfie-wrap">
+                            <video id="selfie-video" class="selfie-video" autoplay playsinline muted></video>
+                            <button class="btn btn-ghost" type="button" id="selfie-capture">Ambil Foto</button>
+                            <input type="hidden" name="selfie_data" id="selfie-data" required>
+                        </div>
+                        <div class="image-preview" id="selfie-preview">Belum ada foto</div>
+                        <small class="muted" id="selfie-status">Klik "Ambil Foto" untuk mengaktifkan kamera.</small>
+                    </div>
                 </div>
             </div>
-            <p class="muted">Jasa per bulan mengikuti rate {{ $feeRate * 100 }}% dari nominal.</p>
-            <table class="table">
-                <tr>
-                    <td>Nominal Pinjaman</td>
-                    <td id="loan-amount-summary">Rp 0</td>
-                </tr>
-                <tr>
-                    <td>Jangka Waktu</td>
-                    <td id="loan-term-summary">0 bulan</td>
-                </tr>
-                <tr>
-                    <td>Jasa per Bulan</td>
-                    <td id="loan-fee">Rp 0</td>
-                </tr>
-                <tr>
-                    <td>Angsuran Pokok per Bulan</td>
-                    <td id="loan-installment">Rp 0</td>
-                </tr>
-                <tr>
-                    <td>Total Angsuran per Bulan</td>
-                    <td id="loan-installment-total">Rp 0</td>
-                </tr>
-            </table>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <div class="card-icon">@include('partials.icon', ['name' => 'chart'])</div>
+                        <h3>Ringkasan Perhitungan</h3>
+                    </div>
+                </div>
+                <p class="muted">Jasa per bulan mengikuti rate {{ $feeRate * 100 }}% dari nominal.</p>
+                <table class="table">
+                    <tr>
+                        <td>Nominal Pinjaman</td>
+                        <td id="loan-amount-summary">Rp 0</td>
+                    </tr>
+                    <tr>
+                        <td>Jangka Waktu</td>
+                        <td id="loan-term-summary">0 bulan</td>
+                    </tr>
+                    <tr>
+                        <td>Jasa per Bulan</td>
+                        <td id="loan-fee">Rp 0</td>
+                    </tr>
+                    <tr>
+                        <td>Angsuran Pokok per Bulan</td>
+                        <td id="loan-installment">Rp 0</td>
+                    </tr>
+                    <tr>
+                        <td>Total Angsuran per Bulan</td>
+                        <td id="loan-installment-total">Rp 0</td>
+                    </tr>
+                </table>
+            </div>
         </div>
-    </div>
+        <div class="card" style="margin-top: 16px;">
+            <button class="btn btn-primary" type="submit" id="loan-submit-btn">Kirim Pengajuan</button>
+        </div>
+    </form>
 
     <script>
         (function () {
@@ -96,6 +105,8 @@
             var selfiePreview = document.getElementById('selfie-preview');
             var selfieData = document.getElementById('selfie-data');
             var selfieStatus = document.getElementById('selfie-status');
+            var submitButton = document.getElementById('loan-submit-btn');
+            var loanForm = document.getElementById('loan-application-form');
             var selfieStream = null;
 
             function formatRupiah(value) {
@@ -127,7 +138,7 @@
             termInput.addEventListener('input', refresh);
             refresh();
 
-            function setupCamera() {
+            function setupCamera(captureAfterReady) {
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     selfieStatus.textContent = 'Perangkat tidak mendukung kamera.';
                     return;
@@ -138,10 +149,16 @@
                     .then(function (stream) {
                         selfieStream = stream;
                         selfieVideo.srcObject = stream;
-                        selfieStatus.textContent = 'Kamera aktif. Klik lagi untuk ambil foto.';
+                        selfieVideo.onloadedmetadata = function () {
+                            selfieVideo.play();
+                            selfieStatus.textContent = 'Kamera aktif.';
+                            if (captureAfterReady) {
+                                setTimeout(captureSelfie, 200);
+                            }
+                        };
                     })
                     .catch(function () {
-                        selfieStatus.textContent = 'Tidak bisa mengakses kamera.';
+                        selfieStatus.textContent = 'Tidak bisa mengakses kamera. Pastikan izin kamera aktif dan website menggunakan HTTPS.';
                     });
             }
 
@@ -166,11 +183,29 @@
             if (selfieCapture) {
                 selfieCapture.addEventListener('click', function () {
                     if (!selfieStream) {
-                        setupCamera();
+                        setupCamera(true);
                         return;
                     }
 
                     captureSelfie();
+                });
+            }
+
+            if (loanForm) {
+                loanForm.addEventListener('submit', function (event) {
+                    if (!selfieData.value) {
+                        event.preventDefault();
+                        selfieStatus.textContent = 'Selfie wajib diambil sebelum mengirim pengajuan.';
+                        if (selfieCapture) {
+                            selfieCapture.focus();
+                        }
+                        return;
+                    }
+
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                        submitButton.textContent = 'Mengirim...';
+                    }
                 });
             }
         })();

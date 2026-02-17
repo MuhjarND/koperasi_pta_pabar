@@ -98,18 +98,16 @@ class LoanController extends Controller
             ->where('id', $request->session()->get('auth.id'))
             ->first();
 
-        if (
-            !$member
-            || empty($member->member_no)
-            || empty($member->name)
-            || empty($member->nip)
-            || empty($member->unit_kerja)
-            || empty($member->phone)
-        ) {
+        if (!$member || empty($member->name)) {
             return back()
-                ->withErrors(['profile' => 'Lengkapi data anggota (nama, nomor anggota, NIP, unit kerja, no HP) di Manajemen User sebelum mengajukan pinjaman.'])
+                ->withErrors(['profile' => 'Profil pengguna tidak ditemukan. Hubungi admin untuk memperbarui data akun.'])
                 ->withInput();
         }
+
+        $applicantProfile = $this->normalizeApplicantProfile(
+            $request->session()->get('auth.id'),
+            $member
+        );
 
         $selfiePath = null;
         $selfieData = $payload['selfie_data'] ?? '';
@@ -147,11 +145,11 @@ class LoanController extends Controller
 
         $loanId = DB::table('loans')->insertGetId([
             'user_id' => $request->session()->get('auth.id'),
-            'member_no' => $member->member_no,
-            'applicant_name' => $member->name,
-            'nip' => $member->nip,
-            'unit_kerja' => $member->unit_kerja,
-            'phone' => $member->phone,
+            'member_no' => $applicantProfile['member_no'],
+            'applicant_name' => $applicantProfile['name'],
+            'nip' => $applicantProfile['nip'],
+            'unit_kerja' => $applicantProfile['unit_kerja'],
+            'phone' => $applicantProfile['phone'],
             'amount' => $payload['amount'],
             'term_months' => $payload['term_months'],
             'purpose' => $payload['purpose'],
@@ -1076,5 +1074,21 @@ class LoanController extends Controller
                 'bendahara.name as bendahara_name',
                 'ketua.name as ketua_name'
             );
+    }
+
+    private function normalizeApplicantProfile(int $userId, $member): array
+    {
+        $memberNo = trim((string) ($member->member_no ?? ''));
+        if ($memberNo === '') {
+            $memberNo = 'U-' . str_pad((string) $userId, 3, '0', STR_PAD_LEFT);
+        }
+
+        return [
+            'member_no' => $memberNo,
+            'name' => trim((string) ($member->name ?? '-')),
+            'nip' => trim((string) ($member->nip ?? '')) !== '' ? trim((string) $member->nip) : '-',
+            'unit_kerja' => trim((string) ($member->unit_kerja ?? '')) !== '' ? trim((string) $member->unit_kerja) : '-',
+            'phone' => trim((string) ($member->phone ?? '')) !== '' ? trim((string) $member->phone) : '-',
+        ];
     }
 }
