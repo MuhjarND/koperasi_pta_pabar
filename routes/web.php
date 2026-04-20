@@ -55,6 +55,9 @@ Route::middleware(['session.auth'])->group(function () {
     Route::post('/saldo', [BalanceController::class, 'store'])
         ->middleware('role:bendahara')
         ->name('saldo.update');
+    Route::post('/saldo/{id}/edit', [BalanceController::class, 'updateEntry'])
+        ->middleware('role:bendahara')
+        ->name('saldo.edit');
     Route::post('/saldo/{id}/verify', [BalanceController::class, 'verify'])
         ->middleware('role:sekretaris|superadmin')
         ->name('saldo.verify');
@@ -156,6 +159,9 @@ Route::middleware(['session.auth'])->group(function () {
     Route::get('/dashboard/superadmin', [DashboardController::class, 'superadmin'])
         ->middleware('role:superadmin')
         ->name('dashboard.superadmin');
+    Route::post('/dashboard/superadmin/wa-notifications', [DashboardController::class, 'toggleWaNotifications'])
+        ->middleware('role:superadmin')
+        ->name('dashboard.superadmin.wa.toggle');
 
     Route::get('/dashboard/sekretaris', [DashboardController::class, 'sekretaris'])
         ->middleware('role:sekretaris')

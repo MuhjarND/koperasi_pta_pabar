@@ -10,16 +10,19 @@ class FonnteService
 {
     protected $token;
     protected $baseUrl;
+    protected $settings;
+    protected $stateCache = null;
 
     public function __construct()
     {
         $this->token = config('services.fonnte.token');
         $this->baseUrl = config('services.fonnte.base_url', 'https://api.fonnte.com/send');
+        $this->settings = new SystemSettingService();
     }
 
     public function isEnabled(): bool
     {
-        return !empty($this->token);
+        return (bool) $this->availabilityState()['enabled'];
     }
 
     public function notifyUser(?int $userId, string $message): bool
@@ -58,7 +61,13 @@ class FonnteService
 
     public function send(string $target, string $message): bool
     {
-        if (!$this->isEnabled()) {
+        $state = $this->availabilityState();
+        if (!$state['enabled']) {
+            Log::info('Fonnte send skipped', [
+                'reason' => $state['reason'],
+                'target_masked' => $this->maskTarget($target),
+                'message_preview' => mb_substr(trim($message), 0, 120, 'UTF-8'),
+            ]);
             return false;
         }
 
@@ -98,7 +107,7 @@ class FonnteService
             return null;
         }
 
-        $digits = preg_replace('/\\D+/', '', $phone);
+        $digits = preg_replace('/\D+/', '', $phone);
         if ($digits === '') {
             return null;
         }
@@ -118,7 +127,7 @@ class FonnteService
             return $message;
         }
 
-        $pattern = '/^Yth\\. Bapak\\/Ibu,?$/m';
+        $pattern = '/^Yth\. Bapak\/Ibu,?$/m';
         $replacement = 'Yth. Bapak/Ibu ' . $name . ',';
 
         return preg_replace($pattern, $replacement, $message, 1) ?? $message;
@@ -147,7 +156,7 @@ class FonnteService
         $hasFollowUpPoint = false;
         foreach ($points as $point) {
             $normalizedPoint = trim((string) $point);
-            $normalizedPoint = preg_replace('/^[^\\p{L}\\p{N}]+/u', '', $normalizedPoint) ?? $normalizedPoint;
+            $normalizedPoint = preg_replace('/^[^\p{L}\p{N}]+/u', '', $normalizedPoint) ?? $normalizedPoint;
             if ($normalizedPoint === '') {
                 continue;
             }
@@ -199,8 +208,57 @@ class FonnteService
 
         return '✅';
     }
+
+    private function availabilityState(): array
+    {
+        if ($this->stateCache !== null) {
+            return $this->stateCache;
+        }
+
+        $tokenConfigured = !empty($this->token);
+        $notificationsEnabled = $this->settings->getBool('wa_notifications_enabled', true);
+
+        if (!$tokenConfigured) {
+            $this->stateCache = [
+                'enabled' => false,
+                'reason' => 'token_empty',
+            ];
+            return $this->stateCache;
+        }
+
+        if (!$notificationsEnabled) {
+            $this->stateCache = [
+                'enabled' => false,
+                'reason' => 'wa_disabled_by_superadmin',
+            ];
+            return $this->stateCache;
+        }
+
+        $this->stateCache = [
+            'enabled' => true,
+            'reason' => 'enabled',
+        ];
+
+        return $this->stateCache;
+    }
+
+    private function maskTarget(?string $target): ?string
+    {
+        if (!$target) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $target);
+        if ($digits === '') {
+            return null;
+        }
+
+        $length = strlen($digits);
+        if ($length <= 6) {
+            return str_repeat('*', $length);
+        }
+
+        return substr($digits, 0, 3) . str_repeat('*', max(0, $length - 6)) . substr($digits, -3);
+    }
 }
-
-
-
 

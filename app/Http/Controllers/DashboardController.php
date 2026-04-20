@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\SystemSettingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class DashboardController extends Controller
 {
@@ -16,7 +18,10 @@ class DashboardController extends Controller
 
     public function superadmin()
     {
+        $settings = new SystemSettingService();
         $balance = $this->currentBalance();
+        $waNotificationsEnabled = $settings->getBool('wa_notifications_enabled', true);
+        $waTokenConfigured = !empty(config('services.fonnte.token'));
         $roleCounts = DB::table('users')
             ->select('role', DB::raw('count(*) as total'))
             ->groupBy('role')
@@ -41,7 +46,38 @@ class DashboardController extends Controller
             'recentLoans' => $recentLoans,
             'statusLabels' => config('koperasi.status_labels'),
             'roleLabels' => config('koperasi.roles'),
+            'waNotificationsEnabled' => $waNotificationsEnabled,
+            'waTokenConfigured' => $waTokenConfigured,
         ]);
+    }
+
+    public function toggleWaNotifications(Request $request)
+    {
+        $validated = $request->validate([
+            'enabled' => 'required|boolean',
+        ]);
+
+        $settings = new SystemSettingService();
+        $enabled = (bool) $validated['enabled'];
+        $current = $settings->getBool('wa_notifications_enabled', true);
+        $actorId = (int) $request->session()->get('auth.id');
+        $actorName = (string) $request->session()->get('auth.name');
+
+        $settings->setBool('wa_notifications_enabled', $enabled, $actorId ?: null);
+
+        Log::info('WA notifications toggle updated', [
+            'actor_id' => $actorId ?: null,
+            'actor_name' => $actorName !== '' ? $actorName : null,
+            'old_value' => $current ? '1' : '0',
+            'new_value' => $enabled ? '1' : '0',
+            'changed_at' => now()->toDateTimeString(),
+        ]);
+
+        return redirect()
+            ->route('dashboard.superadmin')
+            ->with('success', $enabled
+                ? 'Notifikasi WhatsApp berhasil diaktifkan.'
+                : 'Notifikasi WhatsApp berhasil dimatikan.');
     }
 
     public function sekretaris()

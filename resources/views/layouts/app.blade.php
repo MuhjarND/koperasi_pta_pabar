@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#ffffff">
     <title>Koperasi Digital</title>
     <link rel="icon" type="image/png" href="{{ asset('logo_koperasi.png') }}">
     <link rel="stylesheet" href="{{ asset('css/koperasi.css') }}">
@@ -32,6 +33,40 @@
         <main class="main">
             @php
                 $twoFactorActive = !empty($authUser['two_factor_enabled']);
+                $role = $authUser['role'] ?? '';
+                $mobileApprovalRoles = ['sekretaris', 'bendahara', 'bendahara_kantor', 'ketua'];
+                $hasMobileApprovalRole = in_array($role, $mobileApprovalRoles, true);
+                $mobilePendingCount = 0;
+
+                if ($role === 'sekretaris') {
+                    $mobilePendingCount += (int) \Illuminate\Support\Facades\DB::table('loans')->where('status', 'submitted')->count();
+                    $mobilePendingCount += (int) \Illuminate\Support\Facades\DB::table('cash_entries')->where('status', 'pending')->count();
+                    $mobilePendingCount += (int) \Illuminate\Support\Facades\DB::table('loan_installment_payments as p')
+                        ->join('users as creator', 'p.created_by', '=', 'creator.id')
+                        ->where('p.is_settlement', 1)
+                        ->where('p.status', 'pending')
+                        ->where('creator.role', 'bendahara')
+                        ->count();
+                } elseif ($role === 'bendahara') {
+                    $mobilePendingCount += (int) \Illuminate\Support\Facades\DB::table('loans')->where('status', 'reviewed')->count();
+                    $mobilePendingCount += (int) \Illuminate\Support\Facades\DB::table('loan_installment_payments as p')
+                        ->leftJoin('users as creator', 'p.created_by', '=', 'creator.id')
+                        ->where('p.is_settlement', 1)
+                        ->where('p.status', 'pending')
+                        ->where(function ($query) {
+                            $query->whereNull('creator.role')
+                                ->orWhere('creator.role', '!=', 'bendahara');
+                        })
+                        ->count();
+                    $mobilePendingCount += (int) \Illuminate\Support\Facades\DB::table('loans')
+                        ->where('status', 'approved_chairman')
+                        ->whereNull('transfer_evidence_path')
+                        ->count();
+                } elseif ($role === 'bendahara_kantor') {
+                    $mobilePendingCount += (int) \Illuminate\Support\Facades\DB::table('deduction_logs')->where('status', 'pending')->count();
+                } elseif ($role === 'ketua') {
+                    $mobilePendingCount += (int) \Illuminate\Support\Facades\DB::table('loans')->where('status', 'approved_treasurer')->count();
+                }
             @endphp
             <div class="top-user-strip">
                 <div class="top-user-meta">
@@ -85,9 +120,16 @@
                 <span>Saldo</span>
             </a>
         @endif
-        <button type="button" class="mobile-tab-button" id="mobile-menu-toggle">
+        <button
+            type="button"
+            class="mobile-tab-button {{ $hasMobileApprovalRole ? 'has-approval-role' : '' }} {{ $hasMobileApprovalRole ? ($mobilePendingCount > 0 ? 'is-pending' : 'is-ok') : '' }}"
+            id="mobile-menu-toggle"
+        >
             @include('partials.icon', ['name' => 'clipboard'])
             <span>Menu</span>
+            @if($hasMobileApprovalRole && $mobilePendingCount > 0)
+                <span class="mobile-tab-badge">{{ $mobilePendingCount }}</span>
+            @endif
         </button>
     </div>
 
@@ -118,10 +160,12 @@
 
             function openMenu() {
                 menu.classList.add('open');
+                openButton.classList.add('active');
             }
 
             function closeMenu() {
                 menu.classList.remove('open');
+                openButton.classList.remove('active');
             }
 
             openButton.addEventListener('click', openMenu);

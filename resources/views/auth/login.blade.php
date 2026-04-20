@@ -29,6 +29,10 @@
                     </button>
                 </div>
             </div>
+            <label class="checkbox">
+                <input type="checkbox" name="remember" value="1" {{ old('remember') ? 'checked' : '' }}>
+                <span>Ingat saya (2 bulan)</span>
+            </label>
             <button class="btn btn-primary" type="submit">Masuk</button>
         </form>
 

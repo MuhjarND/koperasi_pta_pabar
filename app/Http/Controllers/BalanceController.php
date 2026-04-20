@@ -72,15 +72,19 @@ class BalanceController extends Controller
         if (in_array($request->session()->get('auth.role'), ['sekretaris', 'superadmin'])) {
             $pendingEntries = DB::table('cash_entries')
                 ->leftJoin('users', 'cash_entries.created_by', '=', 'users.id')
+                ->leftJoin('users as editors', 'cash_entries.edited_by', '=', 'editors.id')
                 ->select(
                     'cash_entries.id',
                     'cash_entries.entry_date',
                     'cash_entries.direction',
                     'cash_entries.description',
+                    'cash_entries.edit_note',
+                    'cash_entries.edited_at',
                     'cash_entries.amount',
                     'cash_entries.category',
                     'cash_entries.evidence_path',
-                    'users.name as created_by_name'
+                    'users.name as created_by_name',
+                    'editors.name as edited_by_name'
                 )
                 ->where('cash_entries.status', 'pending')
                 ->orderByDesc('cash_entries.entry_date')
@@ -269,6 +273,94 @@ class BalanceController extends Controller
             ->with('success', 'Pemasukan/pengeluaran berhasil diverifikasi.');
     }
 
+    public function updateEntry(Request $request, $id)
+    {
+        $role = $request->session()->get('auth.role');
+        if ($role !== 'bendahara') {
+            return redirect()->route('saldo.index');
+        }
+
+        $entry = DB::table('cash_entries')->where('id', $id)->first();
+        if (!$entry) {
+            return redirect()
+                ->route('saldo.index')
+                ->withErrors(['error' => 'Transaksi arus kas tidak ditemukan.']);
+        }
+
+        $authId = (int) $request->session()->get('auth.id');
+        if (!$this->isEditableCashEntry($entry, $authId)) {
+            return redirect()
+                ->route('saldo.index')
+                ->withErrors(['error' => 'Transaksi ini tidak dapat diubah oleh bendahara.']);
+        }
+
+        $rules = [
+            'entry_date' => 'required|date',
+            'description' => 'required|string|max:255',
+            'amount' => 'required|numeric|min:0',
+            'edit_note' => 'required|string|max:500',
+            'evidence' => 'nullable|file|mimes:jpg,jpeg,png,pdf|max:2048',
+        ];
+        if ($entry->direction === 'out') {
+            $rules['category'] = 'required|in:rat,adm,adm_transfer,atk,lain-lain';
+        }
+
+        $payload = $request->validate($rules);
+
+        $evidencePath = $entry->evidence_path;
+        if ($request->hasFile('evidence')) {
+            $folder = 'uploads/evidence';
+            $publicFolder = public_path($folder);
+            if (!is_dir($publicFolder)) {
+                mkdir($publicFolder, 0755, true);
+            }
+            $file = $request->file('evidence');
+            $filename = uniqid('evidence_', true) . '.' . $file->getClientOriginalExtension();
+            $file->move($publicFolder, $filename);
+            $evidencePath = $folder . '/' . $filename;
+        }
+
+        $updateData = [
+            'entry_date' => $payload['entry_date'],
+            'description' => $payload['description'],
+            'amount' => (float) $payload['amount'],
+            'edit_note' => $payload['edit_note'],
+            'evidence_path' => $evidencePath,
+            'status' => 'pending',
+            'verified_by' => null,
+            'verified_at' => null,
+            'edited_by' => $authId,
+            'edited_at' => now(),
+            'updated_at' => now(),
+        ];
+        if ($entry->direction === 'out') {
+            $updateData['category'] = $payload['category'] ?? $entry->category;
+        }
+
+        DB::table('cash_entries')
+            ->where('id', $entry->id)
+            ->update($updateData);
+
+        $amountLabel = number_format((float) ($payload['amount'] ?? 0), 2, ',', '.');
+        $sekretarisLink = route('saldo.index');
+        $notifier = new FonnteService();
+        $notifier->notifyRole(
+            'sekretaris',
+            $notifier->formatMessage([
+                'Transaksi arus kas diperbarui bendahara dan menunggu verifikasi ulang.',
+                'Jenis: ' . ($entry->direction === 'in' ? 'Pemasukan' : 'Pengeluaran'),
+                'Uraian: ' . ($payload['description'] ?? '-'),
+                'Nominal: Rp ' . $amountLabel,
+                'Catatan edit: ' . ($payload['edit_note'] ?? '-'),
+                'Tindak lanjut: ' . $sekretarisLink,
+            ], '🤝')
+        );
+
+        return redirect()
+            ->route('saldo.index')
+            ->with('success', 'Perubahan transaksi berhasil dikirim untuk verifikasi sekretaris.');
+    }
+
     private function ledgerData($month, $year, $types)
     {
         $monthNames = $this->monthNames();
@@ -358,11 +450,14 @@ class BalanceController extends Controller
                 'expenses' => null,
                 'evidence_path' => $row->evidence_path ?? null,
                 'note' => '-',
+                'source_type' => 'loan',
+                'source_id' => null,
+                'can_edit' => false,
             ];
         }
 
         $cashRows = DB::table('cash_entries')
-            ->select('entry_date', 'direction', 'description', 'amount', 'category', 'user_id', 'created_at', 'evidence_path')
+            ->select('id', 'entry_date', 'direction', 'description', 'edit_note', 'amount', 'category', 'user_id', 'created_at', 'created_by', 'evidence_path')
             ->whereBetween('entry_date', [$start->toDateString(), $end->toDateString()])
             ->where(function ($query) {
                 $query->whereNull('status')
@@ -483,7 +578,7 @@ class BalanceController extends Controller
             $savingsPostedRows = DB::table('savings_transactions')
                 ->select(
                     'user_id',
-                    DB::raw("date_format(posted_at, '%Y-%m') as entry_month"),
+                    DB::raw('date(posted_at) as entry_date'),
                     'type',
                     DB::raw('sum(amount) as total')
                 )
@@ -494,27 +589,28 @@ class BalanceController extends Controller
                         ->orWhere('note', '!=', 'Potong Gaji');
                 })
                 ->whereBetween('posted_at', [$start, $end])
-                ->groupBy('user_id', DB::raw("date_format(posted_at, '%Y-%m')"), 'type')
+                ->groupBy('user_id', DB::raw('date(posted_at)'), 'type')
                 ->get();
 
             foreach ($savingsPostedRows as $item) {
-                $entryMonth = $item->entry_month;
-                if (!isset($savingsBreakdownMap[$item->user_id][$entryMonth])) {
-                    $savingsBreakdownMap[$item->user_id][$entryMonth] = [
+                $entryDate = $item->entry_date;
+                if (!isset($savingsBreakdownMap[$item->user_id][$entryDate])) {
+                    $savingsBreakdownMap[$item->user_id][$entryDate] = [
                         'pokok' => 0,
                         'wajib' => 0,
                         'sukarela' => 0,
                     ];
                 }
 
-                if (isset($savingsBreakdownMap[$item->user_id][$entryMonth][$item->type])) {
-                    $savingsBreakdownMap[$item->user_id][$entryMonth][$item->type] += (float) $item->total;
+                if (isset($savingsBreakdownMap[$item->user_id][$entryDate][$item->type])) {
+                    $savingsBreakdownMap[$item->user_id][$entryDate][$item->type] += (float) $item->total;
                 }
             }
         }
 
         foreach ($cashRows as $row) {
             $date = Carbon::parse($row->entry_date)->toDateString();
+            $entryDateKey = $date;
             $monthKey = Carbon::parse($row->entry_date)->format('Y-m');
             $timestamp = Carbon::parse($row->created_at ?? $row->entry_date)->getTimestamp();
             $isLoanOut = $row->direction === 'out' && $row->category === 'peminjaman';
@@ -539,7 +635,7 @@ class BalanceController extends Controller
                 $potonganTotals = null;
 
                 if ($row->category === 'simpanan' && !empty($row->user_id)) {
-                    $detail = $savingsBreakdownMap[$row->user_id][$monthKey] ?? null;
+                    $detail = $savingsBreakdownMap[$row->user_id][$entryDateKey] ?? null;
                     if ($detail) {
                         $detailTotal = (float) ($detail['pokok'] ?? 0)
                             + (float) ($detail['wajib'] ?? 0)
@@ -613,6 +709,12 @@ class BalanceController extends Controller
                     'potongan_totals' => $potonganTotals,
                     'evidence_path' => $evidencePath,
                     'note' => '-',
+                    'source_type' => 'cash',
+                    'source_id' => $row->id,
+                    'can_edit' => $this->isEditableCashEntry($row),
+                    'entry_direction' => $row->direction,
+                    'entry_category' => $row->category,
+                    'entry_edit_note' => $row->edit_note,
                 ];
             } else {
                 $transactions[] = [
@@ -634,6 +736,12 @@ class BalanceController extends Controller
                     'potongan_totals' => null,
                     'evidence_path' => $evidencePath,
                     'note' => '-',
+                    'source_type' => 'cash',
+                    'source_id' => $row->id,
+                    'can_edit' => $this->isEditableCashEntry($row),
+                    'entry_direction' => $row->direction,
+                    'entry_category' => $row->category,
+                    'entry_edit_note' => $row->edit_note,
                 ];
             }
         }
@@ -665,6 +773,9 @@ class BalanceController extends Controller
             'balance' => $balance,
             'evidence_path' => null,
             'note' => '-',
+            'source_type' => 'opening',
+            'source_id' => null,
+            'can_edit' => false,
         ];
 
         foreach ($transactions as $entry) {
@@ -692,6 +803,40 @@ class BalanceController extends Controller
             'monthNames' => $monthNames,
             'availableYears' => $availableYears,
         ];
+    }
+
+    private function isEditableCashEntry($entry, $userId = null)
+    {
+        if (!$entry) {
+            return false;
+        }
+
+        $blockedCategories = ['potongan', 'simpanan', 'pelunasan', 'peminjaman'];
+        if (in_array((string) ($entry->category ?? ''), $blockedCategories, true)) {
+            return false;
+        }
+
+        $direction = (string) ($entry->direction ?? '');
+        if (!in_array($direction, ['in', 'out'], true)) {
+            return false;
+        }
+
+        if ($direction === 'out') {
+            $allowedOut = ['rat', 'adm', 'adm_transfer', 'atk', 'lain-lain'];
+            if (!in_array((string) ($entry->category ?? ''), $allowedOut, true)) {
+                return false;
+            }
+        }
+
+        if ($direction === 'in' && !in_array((string) ($entry->category ?? ''), ['saldo_awal', null, ''], true)) {
+            return false;
+        }
+
+        if ($userId !== null && (int) ($entry->created_by ?? 0) !== (int) $userId) {
+            return false;
+        }
+
+        return true;
     }
 
     private function monthNames()

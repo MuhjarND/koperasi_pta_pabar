@@ -59,6 +59,41 @@
         <div class="card">
             <div class="card-header">
                 <div class="card-title">
+                    <div class="card-icon">@include('partials.icon', ['name' => 'check'])</div>
+                    <h3>Notifikasi WhatsApp</h3>
+                </div>
+            </div>
+            <div class="summary-grid">
+                <div class="summary-item {{ $waNotificationsEnabled ? 'accent' : 'warning' }}">
+                    <div class="label">Status WA</div>
+                    <div class="value">{{ $waNotificationsEnabled ? 'Aktif' : 'Nonaktif' }}</div>
+                </div>
+                <div class="summary-item {{ $waTokenConfigured ? 'accent' : 'warning' }}">
+                    <div class="label">Token Fonnte</div>
+                    <div class="value">{{ $waTokenConfigured ? 'Terkonfigurasi' : 'Belum Diisi' }}</div>
+                </div>
+            </div>
+            <div class="action-row" style="margin-top: 14px;">
+                <form method="post" action="{{ route('dashboard.superadmin.wa.toggle') }}">
+                    @csrf
+                    <input type="hidden" name="enabled" value="{{ $waNotificationsEnabled ? 0 : 1 }}">
+                    <button type="submit" class="btn {{ $waNotificationsEnabled ? 'btn-ghost' : 'btn-primary' }}">
+                        {{ $waNotificationsEnabled ? 'Matikan Notifikasi WA' : 'Aktifkan Notifikasi WA' }}
+                    </button>
+                </form>
+                <span class="badge {{ $waNotificationsEnabled ? 'success' : 'danger' }}">
+                    {{ $waNotificationsEnabled ? 'WA Aktif' : 'WA Nonaktif' }}
+                </span>
+            </div>
+            @if(!$waTokenConfigured)
+                <div class="alert warning" style="margin-top: 12px;">
+                    Token Fonnte belum diisi. Walaupun status aktif, notifikasi tidak akan terkirim.
+                </div>
+            @endif
+        </div>
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
                     <div class="card-icon">@include('partials.icon', ['name' => 'chart'])</div>
                     <h3>Status Peminjaman</h3>
                 </div>
