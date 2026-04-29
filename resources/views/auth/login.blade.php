@@ -196,7 +196,7 @@
                     <img src="{{ asset('logo_koperasi.png') }}" alt="Logo Koperasi">
                 </div>
                 <h1>Koperasi Digital</h1>
-                <p>Koperasi Bagi Hasil As-Salam</p>
+                <p>Koperasi As-Salam PTA Papua Barat</p>
                 <div class="login-divider"></div>
                 <p class="login-brand-copy">Sistem simpan pinjam yang membantu anggota mengakses informasi saldo, pinjaman, dan angsuran dengan mudah.</p>
             </div>
