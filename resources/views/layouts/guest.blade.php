@@ -6,7 +6,8 @@
     <meta name="theme-color" content="#ffffff">
     <title>Koperasi Digital</title>
     <link rel="icon" type="image/png" href="{{ asset('logo_koperasi.png') }}">
-    <link rel="stylesheet" href="{{ asset('css/koperasi.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/koperasi.css') }}?v={{ file_exists(public_path('css/koperasi.css')) ? filemtime(public_path('css/koperasi.css')) : time() }}">
+    @stack('styles')
 </head>
 <body class="@yield('body_class')">
     <div class="auth-wrapper">

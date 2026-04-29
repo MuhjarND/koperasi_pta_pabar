@@ -542,7 +542,10 @@ body {
   border-radius: var(--radius);
   background: var(--bg-white);
   border: 1px solid var(--stroke);
-  display: flex; align-items: center; gap: 14px;
+  display: grid;
+  grid-template-columns: 46px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
   box-shadow: var(--shadow-xs);
   transition: box-shadow var(--transition);
   min-height: 112px;
@@ -554,13 +557,25 @@ body {
   box-shadow: 0 10px 28px rgba(37,99,235,0.08);
 }
 .stat-icon {
-  width: 42px; height: 42px; border-radius: 10px;
+  width: 46px; height: 46px; border-radius: 12px;
   background: var(--accent-soft); color: var(--accent);
   display: grid; place-items: center; flex: 0 0 auto;
 }
 .stat--balance .stat-icon { background: rgba(37,99,235,0.12); color: var(--accent); box-shadow: inset 0 0 0 1px rgba(37,99,235,0.08); }
-.stat .value { font-size: 22px; font-weight: 800; color: var(--ink-strong); line-height: 1.25; letter-spacing: -0.02em; }
-.stat > div:last-child > div:first-child { color: var(--ink-light); font-weight: 500; }
+.stat .value {
+  font-size: clamp(20px, 2vw, 24px);
+  font-weight: 800;
+  color: var(--ink-strong);
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+.stat > div:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+.stat > div:last-child > div:first-child { color: var(--ink-light); font-weight: 500; line-height: 1.25; }
 .stat--mint { background: var(--green-soft); border-color: var(--green-border); }
 .stat--mint .stat-icon { background: rgba(22,163,74,0.1); color: var(--green); }
 
@@ -1197,6 +1212,18 @@ body.sidebar-collapsed .brand-text, body.sidebar-collapsed .nav, body.sidebar-co
   .grid-two { grid-template-columns: 1fr; }
   .form-inline-two { grid-template-columns: 1fr; }
   .stat-grid { grid-template-columns: 1fr; }
+  .stat {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: 14px;
+    padding: 18px;
+  }
+  .stat-icon {
+    width: 44px;
+    height: 44px;
+  }
+  .stat .value {
+    font-size: clamp(19px, 6vw, 23px);
+  }
   .info-grid { grid-template-columns: 1fr; }
   .modal { width: 96vw; }
   .modal-card { padding: 16px; }
