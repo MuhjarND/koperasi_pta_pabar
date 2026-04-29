@@ -44,7 +44,7 @@ class AuthController extends Controller
 
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
             return back()
-                ->withErrors(['email' => 'Email atau password tidak cocok.'])
+                ->withErrors(['email' => 'Email/NIP atau password tidak cocok.'])
                 ->withInput([
                     'email' => $identifier,
                     'remember' => $request->boolean('remember'),

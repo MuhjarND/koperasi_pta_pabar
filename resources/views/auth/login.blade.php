@@ -28,8 +28,8 @@
             padding: 56px 48px;
             color: #ffffff;
             background:
-                radial-gradient(circle at 50% 58%, rgba(255,255,255,0.08), transparent 32%),
-                linear-gradient(135deg, #064e3b 0%, #0f6b49 100%);
+                radial-gradient(circle at 50% 58%, rgba(245,230,31,0.18), transparent 32%),
+                linear-gradient(135deg, #005c2d 0%, #009848 58%, #e02028 100%);
         }
         .login-brand-content {
             width: min(440px, 100%);
@@ -44,8 +44,8 @@
             border-radius: 24px;
             display: grid;
             place-items: center;
-            background: rgba(255,255,255,0.08);
-            border: 1px solid rgba(250,204,21,0.42);
+            background: rgba(17,18,13,0.16);
+            border: 1px solid rgba(245,230,31,0.62);
             box-shadow: 0 24px 80px rgba(0,0,0,0.22);
             overflow: hidden;
         }
@@ -73,7 +73,7 @@
             width: 74px;
             height: 3px;
             border-radius: 999px;
-            background: #facc15;
+            background: linear-gradient(90deg, #f5e61f, #ffffff, #e02028);
             margin: 8px 0 12px;
         }
         .login-brand-copy {
@@ -94,7 +94,7 @@
         }
         .login-form-card h2 {
             margin: 0 0 4px;
-            color: #064e3b;
+            color: #009848;
             font-size: 28px;
             line-height: 1.2;
             letter-spacing: -0.03em;
@@ -112,8 +112,8 @@
             overflow: hidden;
         }
         .login-input-group:focus-within {
-            border-color: #0f6b49;
-            box-shadow: 0 0 0 3px rgba(15,107,73,0.12);
+            border-color: #009848;
+            box-shadow: 0 0 0 3px rgba(0,152,72,0.12);
         }
         .login-input-group > span {
             height: 100%;
@@ -148,11 +148,15 @@
         .login-submit {
             min-height: 56px;
             border-radius: 9px;
-            background: #0f6b49 !important;
-            border-color: #0f6b49 !important;
+            background: #009848 !important;
+            border-color: #009848 !important;
             color: #ffffff !important;
             font-size: 16px;
             font-weight: 800;
+        }
+        .login-submit:hover {
+            background: #00783a !important;
+            border-color: #00783a !important;
         }
         @media (max-width: 820px) {
             .login-split {

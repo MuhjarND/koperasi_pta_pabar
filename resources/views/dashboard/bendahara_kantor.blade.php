@@ -5,7 +5,7 @@
 
 @section('content')
     <div class="grid-two">
-        <div class="card">
+        <div class="card balance-card">
             <div class="card-header">
                 <div class="card-title">
                     <div class="card-icon">@include('partials.icon', ['name' => 'wallet'])</div>
