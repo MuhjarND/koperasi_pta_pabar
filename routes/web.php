@@ -118,8 +118,10 @@ Route::middleware(['session.auth'])->group(function () {
         Route::get('/', [AdminUserController::class, 'index'])->name('users.index');
         Route::get('/create', [AdminUserController::class, 'create'])->name('users.create');
         Route::post('/', [AdminUserController::class, 'store'])->name('users.store');
+        Route::post('/credentials/send-all', [AdminUserController::class, 'sendCredentialsToAllMembers'])->name('users.credentials.sendAll');
         Route::get('/{id}/edit', [AdminUserController::class, 'edit'])->name('users.edit');
         Route::post('/{id}', [AdminUserController::class, 'update'])->name('users.update');
+        Route::post('/{id}/credentials', [AdminUserController::class, 'sendCredentials'])->name('users.credentials.send');
     });
 
     Route::prefix('produk')->middleware('role:sekretaris')->group(function () {

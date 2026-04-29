@@ -29,20 +29,24 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $credentials = $request->validate([
-            'email' => 'required|email',
+            'email' => 'required|string',
             'password' => 'required|string',
             'remember' => 'nullable|boolean',
         ]);
 
+        $identifier = trim($credentials['email']);
         $user = DB::table('users')
-            ->where('email', $credentials['email'])
+            ->where(function ($query) use ($identifier) {
+                $query->where('email', $identifier)
+                    ->orWhere('nip', $identifier);
+            })
             ->first();
 
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
             return back()
                 ->withErrors(['email' => 'Email atau password tidak cocok.'])
                 ->withInput([
-                    'email' => $credentials['email'],
+                    'email' => $identifier,
                     'remember' => $request->boolean('remember'),
                 ]);
         }
@@ -51,7 +55,7 @@ class AuthController extends Controller
             return back()
                 ->withErrors(['email' => 'Akun Anda tidak aktif. Hubungi admin.'])
                 ->withInput([
-                    'email' => $credentials['email'],
+                    'email' => $identifier,
                     'remember' => $request->boolean('remember'),
                 ]);
         }

@@ -8,7 +8,7 @@
     <link rel="icon" type="image/png" href="{{ asset('logo_koperasi.png') }}">
     <link rel="stylesheet" href="{{ asset('css/koperasi.css') }}">
 </head>
-<body>
+<body class="@yield('body_class')">
     <div class="auth-wrapper">
         @yield('content')
     </div>

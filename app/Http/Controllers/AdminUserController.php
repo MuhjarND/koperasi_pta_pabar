@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\FonnteService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class AdminUserController extends Controller
 {
@@ -191,6 +193,108 @@ class AdminUserController extends Controller
         return redirect()
             ->route('users.index')
             ->with('success', 'User berhasil diperbarui.');
+    }
+
+    public function sendCredentials(Request $request, $id)
+    {
+        $user = DB::table('users')->where('id', $id)->first();
+        if (!$user) {
+            return redirect()->route('users.index')->withErrors(['error' => 'User tidak ditemukan.']);
+        }
+
+        if ($user->role !== 'anggota') {
+            return redirect()->route('users.index')->withErrors(['error' => 'Kredensial hanya dapat dikirim ke anggota.']);
+        }
+
+        if (empty($user->phone)) {
+            return redirect()->route('users.index')->withErrors(['error' => 'Nomor HP anggota belum diisi.']);
+        }
+
+        $notifier = new FonnteService();
+        if (!$notifier->isEnabled()) {
+            return redirect()->route('users.index')->withErrors(['error' => 'Notifikasi WhatsApp belum aktif atau token belum tersedia.']);
+        }
+
+        $plainPassword = $this->resetMemberPassword($user->id);
+        $sent = $notifier->notifyUser($user->id, $this->credentialMessage($user, $plainPassword));
+
+        if (!$sent) {
+            return redirect()
+                ->route('users.index')
+                ->withErrors(['error' => 'Password sudah diperbarui, tetapi notifikasi WA gagal dikirim.']);
+        }
+
+        return redirect()
+            ->route('users.index')
+            ->with('success', 'Username dan password berhasil dikirim ke ' . $user->name . '.');
+    }
+
+    public function sendCredentialsToAllMembers(Request $request)
+    {
+        $notifier = new FonnteService();
+        if (!$notifier->isEnabled()) {
+            return redirect()->route('users.index')->withErrors(['error' => 'Notifikasi WhatsApp belum aktif atau token belum tersedia.']);
+        }
+
+        $members = DB::table('users')
+            ->where('role', 'anggota')
+            ->where('status', 'active')
+            ->orderBy('name')
+            ->get();
+
+        $sent = 0;
+        $failed = 0;
+        $skipped = 0;
+
+        foreach ($members as $member) {
+            if (empty($member->phone)) {
+                $skipped++;
+                continue;
+            }
+
+            $plainPassword = $this->resetMemberPassword($member->id);
+            if ($notifier->notifyUser($member->id, $this->credentialMessage($member, $plainPassword))) {
+                $sent++;
+            } else {
+                $failed++;
+            }
+        }
+
+        $message = "Kredensial anggota selesai diproses. Terkirim: {$sent}, gagal: {$failed}, dilewati tanpa nomor HP: {$skipped}.";
+
+        return redirect()
+            ->route('users.index')
+            ->with('success', $message);
+    }
+
+    private function resetMemberPassword($userId)
+    {
+        $password = 'Kop-' . strtoupper(Str::random(6));
+
+        DB::table('users')
+            ->where('id', $userId)
+            ->update([
+                'password' => Hash::make($password),
+                'updated_at' => now(),
+            ]);
+
+        return $password;
+    }
+
+    private function credentialMessage($user, $plainPassword)
+    {
+        $notifier = new FonnteService();
+        $username = $user->email;
+        $nipLine = !empty($user->nip) ? 'NIP: ' . $user->nip : 'NIP: -';
+
+        return $notifier->formatMessage([
+            'Akun Koperasi Digital Anda telah disiapkan.',
+            'Nama: ' . $user->name,
+            'Username/Email: ' . $username,
+            $nipLine,
+            'Password sementara: ' . $plainPassword,
+            'Tindak lanjut: ' . route('login'),
+        ]);
     }
 
     private function generateMemberNo()

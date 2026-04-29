@@ -6,6 +6,13 @@
 @section('content')
     <div class="action-row" style="margin-bottom: 16px;">
         <a class="btn btn-primary" href="{{ route('users.create') }}">Tambah User</a>
+        <form method="post" action="{{ route('users.credentials.sendAll') }}" onsubmit="return confirm('Kirim ulang username dan password baru ke seluruh anggota aktif? Password anggota akan diperbarui.');">
+            @csrf
+            <button class="btn btn-ghost" type="submit">
+                @include('partials.icon', ['name' => 'users'])
+                Kirim ke Seluruh Anggota
+            </button>
+        </form>
         <form method="get" action="{{ route('users.index') }}" class="action-row">
             <input type="text" name="q" value="{{ $filters['q'] ?? '' }}" placeholder="Cari nama/email/no anggota">
             <select name="role">
@@ -50,7 +57,18 @@
                         <td>{{ $user->member_no ?? '-' }}</td>
                         <td>{{ $user->status === 'active' ? 'Aktif' : 'Nonaktif' }}</td>
                         <td>
-                            <a class="btn btn-ghost" href="{{ route('users.edit', $user->id) }}">Edit</a>
+                            <div class="action-row">
+                                <a class="btn btn-ghost" href="{{ route('users.edit', $user->id) }}">Edit</a>
+                                @if($user->role === 'anggota')
+                                    <form method="post" action="{{ route('users.credentials.send', $user->id) }}" onsubmit="return confirm('Kirim username dan password baru ke {{ $user->name }}? Password anggota akan diperbarui.');">
+                                        @csrf
+                                        <button class="btn btn-ghost" type="submit">
+                                            @include('partials.icon', ['name' => 'barcode'])
+                                            Kirim Login
+                                        </button>
+                                    </form>
+                                @endif
+                            </div>
                         </td>
                     </tr>
                 @empty
