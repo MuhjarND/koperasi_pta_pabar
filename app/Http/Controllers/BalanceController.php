@@ -62,10 +62,15 @@ class BalanceController extends Controller
 
         $ledgerData = $this->ledgerData($month, $year, $types);
 
-        $lastTransaction = DB::table('savings_transactions')
-            ->leftJoin('users', 'savings_transactions.created_by', '=', 'users.id')
-            ->select('savings_transactions.created_at', 'users.name as created_by_name')
-            ->orderByDesc('savings_transactions.created_at')
+        $lastTransaction = DB::table('cash_entries')
+            ->leftJoin('users', 'cash_entries.created_by', '=', 'users.id')
+            ->select('cash_entries.entry_date as created_at', 'users.name as created_by_name')
+            ->where(function ($query) {
+                $query->whereNull('cash_entries.status')
+                    ->orWhere('cash_entries.status', 'approved');
+            })
+            ->orderByDesc('cash_entries.entry_date')
+            ->orderByDesc('cash_entries.created_at')
             ->first();
 
         $pendingEntries = [];
@@ -788,6 +793,8 @@ class BalanceController extends Controller
             }
             $ledgerRows[] = $entry;
         }
+
+        $ledgerRows = array_reverse($ledgerRows);
 
         $years = collect();
         $years = $years->merge(DB::table('loan_installment_payments')->selectRaw('distinct year(paid_at) as year')->pluck('year'));

@@ -40,4 +40,13 @@ return [
         'default_password' => env('KOPERASI_IMPORT_DEFAULT_PASSWORD', 'ptapabar'),
         'default_date' => env('KOPERASI_IMPORT_DEFAULT_DATE', '2026-01-01'),
     ],
+    'rekap_import' => [
+        'xlsx_path' => env('KOPERASI_REKAP_XLSX_PATH', 'C:/Users/rubik/Documents/KEADAAN KEUANGAN KOPERASI AS-SALAM 2026.xlsx'),
+        'sheet_keu' => env('KOPERASI_REKAP_SHEET_KEU', 'REKAP KEU KOP  2026'),
+        'sheet_pemotongan' => env('KOPERASI_REKAP_SHEET_PEMOTONGAN', 'REKAP PEMOTONGAN'),
+        'sheet_peminjaman' => env('KOPERASI_REKAP_SHEET_PEMINJAMAN', 'REKAP PEMINJAMAN'),
+        'sheet_simpanan' => env('KOPERASI_REKAP_SHEET_SIMPANAN', 'REKAP SIMPANAN ANGGOTA'),
+        'year' => (int) env('KOPERASI_REKAP_YEAR', 2026),
+        'posted_month_limit' => (int) env('KOPERASI_REKAP_POSTED_MONTH_LIMIT', 4),
+    ],
 ];
