@@ -60,6 +60,7 @@
                         ->count();
                     $mobilePendingCount += (int) \Illuminate\Support\Facades\DB::table('loans')
                         ->where('status', 'approved_chairman')
+                        ->whereNull('transfered_at')
                         ->whereNull('transfer_evidence_path')
                         ->count();
                 } elseif ($role === 'bendahara_kantor') {

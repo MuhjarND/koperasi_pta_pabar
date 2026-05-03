@@ -23,7 +23,7 @@ class BalanceController extends Controller
             ->where('installment_no', '>', 0)
             ->where(function ($query) {
                 $query->whereNull('note')
-                    ->orWhereNotIn('note', ['Potong Gaji', 'Pelunasan']);
+                    ->orWhereNotIn('note', ['Potong Gaji', 'Pelunasan', 'Pembayaran sebelum ' . config('koperasi.rekap_import.year', 2026)]);
             })
             ->select(DB::raw('sum(amount_principal + amount_fee) as total'))
             ->value('total');
@@ -378,7 +378,7 @@ class BalanceController extends Controller
             ->where('paid_at', '<', $start->toDateString())
             ->where(function ($query) {
                 $query->whereNull('note')
-                    ->orWhereNotIn('note', ['Potong Gaji', 'Pelunasan']);
+                    ->orWhereNotIn('note', ['Potong Gaji', 'Pelunasan', 'Pembayaran sebelum ' . config('koperasi.rekap_import.year', 2026)]);
             })
             ->select(DB::raw('sum(amount_principal + amount_fee) as total'))
             ->value('total');
@@ -421,7 +421,7 @@ class BalanceController extends Controller
             ->where('loan_installment_payments.installment_no', '>', 0)
             ->where(function ($query) {
                 $query->whereNull('loan_installment_payments.note')
-                    ->orWhereNotIn('loan_installment_payments.note', ['Potong Gaji', 'Pelunasan']);
+                    ->orWhereNotIn('loan_installment_payments.note', ['Potong Gaji', 'Pelunasan', 'Pembayaran sebelum ' . config('koperasi.rekap_import.year', 2026)]);
             })
             ->whereBetween('loan_installment_payments.paid_at', [$start->toDateString(), $end->toDateString()])
             ->orderBy('loan_installment_payments.paid_at')

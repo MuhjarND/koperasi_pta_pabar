@@ -585,6 +585,7 @@ class LoanController extends Controller
                 'loans.pdf_path'
             )
             ->where('loans.status', 'approved_chairman')
+            ->whereNull('loans.transfered_at')
             ->whereNull('loans.transfer_evidence_path')
             ->orderByDesc('loans.chairman_approved_at')
             ->get();

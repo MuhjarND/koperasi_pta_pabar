@@ -553,7 +553,7 @@ class DashboardController extends Controller
             ->where('installment_no', '>', 0)
             ->where(function ($query) {
                 $query->whereNull('note')
-                    ->orWhereNotIn('note', ['Potong Gaji', 'Pelunasan']);
+                    ->orWhereNotIn('note', ['Potong Gaji', 'Pelunasan', 'Pembayaran sebelum ' . config('koperasi.rekap_import.year', 2026)]);
             })
             ->select(DB::raw('sum(amount_principal + amount_fee) as total'))
             ->value('total');

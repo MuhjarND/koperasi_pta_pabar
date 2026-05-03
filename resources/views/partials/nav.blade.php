@@ -45,7 +45,11 @@
             ->count()
         : 0;
     $pendingDisbursements = $canTreasurer
-        ? DB::table('loans')->where('status', 'approved_chairman')->whereNull('transfer_evidence_path')->count()
+        ? DB::table('loans')
+            ->where('status', 'approved_chairman')
+            ->whereNull('transfered_at')
+            ->whereNull('transfer_evidence_path')
+            ->count()
         : 0;
 
     $hasApprovalMenu = $canSecretary || $canTreasurer || $canChairman || $canOfficeTreasurer;

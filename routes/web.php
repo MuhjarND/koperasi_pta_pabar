@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\AutoLoginController;
 use App\Http\Controllers\BalanceController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DeductionController;
@@ -42,6 +43,8 @@ Route::get('/produk/laporan/verify', [ProductController::class, 'verifyReport'])
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+Route::get('/autologin', [AutoLoginController::class, 'show'])->name('autologin');
+Route::post('/autologin', [AutoLoginController::class, 'login'])->name('autologin.login');
 
 Route::middleware(['session.auth'])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');

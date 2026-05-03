@@ -685,17 +685,31 @@ class KoperasiRekapSeeder extends Seeder
                 ];
             }
 
-            $loanAmount = $loanYear < $targetYear
-                ? ($openingOutstanding > 0 ? $openingOutstanding : $originalAmount)
-                : ($originalAmount > 0 ? $originalAmount : $openingOutstanding);
+            $loanAmount = $originalAmount > 0 ? $originalAmount : $openingOutstanding;
 
             if ($loanAmount <= 0) {
                 continue;
             }
 
-            $termMonths = $loanYear < $targetYear
-                ? max(1, count($monthlyPayments))
-                : max(1, $termHint ?: count($monthlyPayments));
+            $termMonths = max(1, $termHint ?: count($monthlyPayments));
+            $preTargetPaidPrincipal = 0.0;
+            $preTargetInstallmentCount = 0;
+
+            if ($loanYear < $targetYear && $originalAmount > 0 && $openingOutstanding > 0 && $originalAmount > $openingOutstanding) {
+                $preTargetPaidPrincipal = round($originalAmount - $openingOutstanding, 2);
+                if ($termHint > 0) {
+                    $monthlyPrincipalHint = $originalAmount / $termHint;
+                    if ($monthlyPrincipalHint > 0) {
+                        $preTargetInstallmentCount = max(1, (int) round($preTargetPaidPrincipal / $monthlyPrincipalHint));
+                    }
+                }
+
+                if ($preTargetInstallmentCount <= 0) {
+                    $preTargetInstallmentCount = 1;
+                }
+
+                $termMonths = max($termMonths, $preTargetInstallmentCount + count($monthlyPayments));
+            }
 
             $loanCode = 'rekap-' . $row . '-' . $user['id'];
             $loanData = [
@@ -732,6 +746,41 @@ class KoperasiRekapSeeder extends Seeder
             $stats['loan_count']++;
 
             $installmentNo = 1;
+            if ($preTargetPaidPrincipal > 0) {
+                $historicalPaidDate = Carbon::create($targetYear - 1, 12, 31, 0, 0, 0);
+                $remainingHistoricalPrincipal = $preTargetPaidPrincipal;
+
+                for ($i = 1; $i <= $preTargetInstallmentCount; $i++) {
+                    $principal = $i === $preTargetInstallmentCount
+                        ? $remainingHistoricalPrincipal
+                        : round($preTargetPaidPrincipal / $preTargetInstallmentCount, 2);
+                    $remainingHistoricalPrincipal = round($remainingHistoricalPrincipal - $principal, 2);
+
+                    DB::table('loan_installment_payments')->updateOrInsert(
+                        [
+                            'loan_id' => $loanId,
+                            'installment_no' => $installmentNo,
+                        ],
+                        [
+                            'paid_at' => $historicalPaidDate->toDateString(),
+                            'amount_principal' => $principal,
+                            'amount_fee' => 0,
+                            'note' => 'Pembayaran sebelum ' . $targetYear,
+                            'created_by' => $superadminId,
+                            'validated_by' => $superadminId,
+                            'validated_at' => $historicalPaidDate->toDateTimeString(),
+                            'status' => 'approved',
+                            'is_settlement' => false,
+                            'updated_at' => $historicalPaidDate->toDateTimeString(),
+                            'created_at' => $historicalPaidDate->toDateTimeString(),
+                        ]
+                    );
+
+                    $stats['installment_count']++;
+                    $installmentNo++;
+                }
+            }
+
             $postedMonthLimit = $this->postedMonthLimit();
             foreach ($monthlyPayments as $month => $payment) {
                 if ($month > $postedMonthLimit) {
@@ -850,6 +899,13 @@ class KoperasiRekapSeeder extends Seeder
             } elseif (stripos($description, 'Pelunasan') === 0) {
                 $category = 'pelunasan';
                 $memberName = $this->extractNameAfterKeyword($description, ['Pelunasan Peminjaman an.', 'Pelunasan']);
+                $user = $this->matchUser($memberName);
+                if (!$user && $memberName !== '') {
+                    $stats['missing_users'][] = $memberName;
+                }
+            } elseif (stripos($description, 'Potongan Pinjaman') === 0) {
+                $category = 'pelunasan';
+                $memberName = $this->extractNameAfterKeyword($description, ['Potongan Pinjaman dari', 'Potongan Pinjaman']);
                 $user = $this->matchUser($memberName);
                 if (!$user && $memberName !== '') {
                     $stats['missing_users'][] = $memberName;
