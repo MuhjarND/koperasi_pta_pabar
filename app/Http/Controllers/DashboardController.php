@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\SystemSettingService;
+use App\Support\SavingsRunningBalance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -284,7 +285,7 @@ class DashboardController extends Controller
         $savingsSummary = [
             'name' => $memberProfile->name ?? 'Anggota',
             'member_no' => $memberProfile->member_no ?? null,
-            'months' => array_values($savingsMonths),
+            'months' => array_values(SavingsRunningBalance::applyToMonths($savingsMonths, $savingsTypes)),
             'total_amount' => $savingsTotal,
         ];
 
@@ -447,7 +448,7 @@ class DashboardController extends Controller
         $savingsSummary = [
             'name' => $memberProfile->name ?? 'Anggota',
             'member_no' => $memberProfile->member_no ?? null,
-            'months' => array_values($savingsMonths),
+            'months' => array_values(SavingsRunningBalance::applyToMonths($savingsMonths, $savingsTypes)),
             'total_amount' => $savingsTotal,
         ];
 

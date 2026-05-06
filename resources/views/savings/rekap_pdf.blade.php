@@ -38,7 +38,7 @@
                     $typeTotals = array_fill_keys(array_keys($types), 0);
                     foreach ($member['months'] as $month) {
                         foreach ($types as $key => $label) {
-                            $typeTotals[$key] += (float) ($month['types'][$key] ?? 0);
+                            $typeTotals[$key] += (float) (($month['movement_types'] ?? $month['types'])[$key] ?? 0);
                         }
                     }
                 @endphp

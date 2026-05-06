@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Support\SavingsRunningBalance;
 use Barryvdh\DomPDF\Facade as PDF;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -99,6 +100,11 @@ class SavingsController extends Controller
         }
 
         foreach ($memberSummaries as $id => $member) {
+            $memberSummaries[$id]['months'] = SavingsRunningBalance::applyToMonths(
+                $memberSummaries[$id]['months'],
+                $types
+            );
+
             foreach ($memberSummaries[$id]['months'] as $key => $month) {
                 $hasManual = $month['has_manual'] ?? false;
                 $hasPostedManual = $month['has_posted_manual'] ?? false;
@@ -197,8 +203,8 @@ class SavingsController extends Controller
         if ($monthParam !== 'all') {
             $monthValue = (int) $monthParam;
             if ($monthValue >= 1 && $monthValue <= 12) {
-                $rowsQuery->whereYear('savings_transactions.created_at', $year)
-                    ->whereMonth('savings_transactions.created_at', $monthValue);
+                $periodEnd = Carbon::create($year, $monthValue, 1, 0, 0, 0)->endOfMonth()->endOfDay();
+                $rowsQuery->where('savings_transactions.created_at', '<=', $periodEnd->toDateTimeString());
             }
         }
 
@@ -241,6 +247,10 @@ class SavingsController extends Controller
         }
 
         foreach ($memberSummaries as $id => $member) {
+            $memberSummaries[$id]['months'] = SavingsRunningBalance::applyToMonths(
+                $memberSummaries[$id]['months'],
+                $types
+            );
             $memberSummaries[$id]['months'] = array_values($memberSummaries[$id]['months']);
         }
 
@@ -254,7 +264,7 @@ class SavingsController extends Controller
         if ($monthParam !== 'all') {
             $monthValue = (int) $monthParam;
             if ($monthValue >= 1 && $monthValue <= 12) {
-                $periodLabel = ($monthNames[$monthValue] ?? $monthValue) . ' ' . $year;
+                $periodLabel = 'Sampai ' . ($monthNames[$monthValue] ?? $monthValue) . ' ' . $year;
             }
         }
 

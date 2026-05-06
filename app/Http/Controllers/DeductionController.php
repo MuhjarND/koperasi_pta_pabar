@@ -66,6 +66,7 @@ class DeductionController extends Controller
             ->when($memberIds, function ($query) use ($memberIds) {
                 $query->whereIn('savings_transactions.user_id', $memberIds);
             })
+            ->where('savings_transactions.note', 'Potong Gaji')
             ->orderBy('users.name')
             ->orderBy('savings_transactions.created_at')
             ->get();
@@ -275,6 +276,7 @@ class DeductionController extends Controller
                 'savings_transactions.amount',
                 'savings_transactions.created_at'
             )
+            ->where('savings_transactions.note', 'Potong Gaji')
             ->orderBy('users.name')
             ->orderBy('savings_transactions.created_at');
 
