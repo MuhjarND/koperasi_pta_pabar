@@ -96,6 +96,7 @@ class DeductionController extends Controller
             )
             ->where('loan_installment_payments.status', 'approved')
             ->where('loan_installment_payments.installment_no', '>', 0)
+            ->where('loan_installment_payments.note', 'Potong Gaji')
             ->when($memberIds, function ($query) use ($memberIds) {
                 $query->whereIn('loans.user_id', $memberIds);
             })
@@ -318,6 +319,7 @@ class DeductionController extends Controller
             )
             ->where('loan_installment_payments.status', 'approved')
             ->where('loan_installment_payments.installment_no', '>', 0)
+            ->where('loan_installment_payments.note', 'Potong Gaji')
             ->orderBy('users.name')
             ->orderBy('loan_installment_payments.paid_at');
 

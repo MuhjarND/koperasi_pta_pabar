@@ -109,16 +109,17 @@
     <div class="mobile-tabs">
         <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard*') ? 'active' : '' }}">
             @include('partials.icon', ['name' => 'dashboard'])
-            <span>Dashboard</span>
+            <span>Beranda</span>
         </a>
         @if(($authUser['role'] ?? '') === 'anggota')
-            <a href="{{ route('anggota.loans.create') }}" class="mobile-tab-plus {{ request()->routeIs('anggota.loans.create') ? 'active' : '' }}" aria-label="Ajukan Peminjaman">
+            <a href="{{ route('anggota.loans.create') }}" class="mobile-tab-plus {{ request()->routeIs('anggota.loans.create') ? 'active' : '' }}" aria-label="Pinjam">
                 <span class="mobile-tab-plus-symbol" aria-hidden="true">+</span>
+                <span class="mobile-tab-plus-label">Pinjam</span>
             </a>
         @else
             <a href="{{ route('saldo.index') }}" class="{{ request()->routeIs('saldo.*') ? 'active' : '' }}">
                 @include('partials.icon', ['name' => 'wallet'])
-                <span>Saldo</span>
+                <span>Kas</span>
             </a>
         @endif
         <button
@@ -127,7 +128,7 @@
             id="mobile-menu-toggle"
         >
             @include('partials.icon', ['name' => 'clipboard'])
-            <span>Menu</span>
+            <span>Lainnya</span>
             @if($hasMobileApprovalRole && $mobilePendingCount > 0)
                 <span class="mobile-tab-badge">{{ $mobilePendingCount }}</span>
             @endif
