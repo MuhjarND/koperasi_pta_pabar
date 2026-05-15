@@ -122,6 +122,12 @@
                                     @if($loan->status === 'approved_chairman' && empty($loan->transfered_at) && empty($loan->transfer_evidence_path))
                                         <a class="btn btn-ghost" href="{{ route('bendahara.loans.disbursement') }}">Pencairan</a>
                                     @endif
+                                    @if($loan->reminder_target)
+                                        <form method="post" action="{{ route('bendahara.loans.monitoring.remind', $loan->id) }}">
+                                            @csrf
+                                            <button class="btn btn-upload" type="submit">Ingatkan WA</button>
+                                        </form>
+                                    @endif
                                     @if($loan->pdf_path)
                                         <a class="btn btn-ghost" href="{{ asset($loan->pdf_path) }}" target="_blank" rel="noopener">Form</a>
                                     @endif

@@ -679,6 +679,8 @@ body {
 }
 .loan-submeta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 .loan-subactions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.loan-subactions form { margin: 0; }
+.loan-subactions .btn { white-space: nowrap; }
 .loan-history { margin-top: 14px; display: grid; gap: 8px; }
 .loan-history-title { font-weight: 600; color: var(--muted); font-size: 13px; }
 

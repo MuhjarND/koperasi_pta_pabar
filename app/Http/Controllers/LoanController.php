@@ -667,6 +667,7 @@ class LoanController extends Controller
                 $loan->current_label = $this->loanMonitoringStatusLabel($loan, $statusLabels);
                 $loan->current_badge_class = $this->loanMonitoringBadgeClass($loan);
                 $loan->progress_percent = $this->loanMonitoringProgressPercent($loan->process_steps);
+                $loan->reminder_target = $this->loanMonitoringReminderTarget($loan);
 
                 return $loan;
             });
@@ -714,6 +715,44 @@ class LoanController extends Controller
                 'year' => $selectedYear,
             ],
         ]);
+    }
+
+    public function bendaharaRemindApproval(Request $request, $id)
+    {
+        $loan = $this->loanDetail($id);
+        if (!$loan) {
+            return back()->withErrors(['error' => 'Data pinjaman tidak ditemukan.']);
+        }
+
+        $target = $this->loanMonitoringReminderTarget($loan);
+        if (!$target) {
+            return back()->withErrors(['error' => 'Pinjaman ini tidak sedang menunggu approval atau pencairan.']);
+        }
+
+        $amountLabel = number_format((float) $loan->amount, 2, ',', '.');
+        $notifier = new FonnteService();
+        $sent = $notifier->notifyRole(
+            $target['role'],
+            $notifier->formatMessage([
+                'Pengingat proses pinjaman menunggu tindak lanjut.',
+                "Tahap: {$target['stage']}",
+                'Nama: ' . ($loan->anggota_name ?? 'Anggota'),
+                'No. Anggota: ' . ($loan->member_no ?? '-'),
+                "Nominal: Rp {$amountLabel}",
+                'Tenor: ' . (int) $loan->term_months . ' bulan',
+                'Tujuan: ' . ($loan->purpose ?? '-'),
+                'Tanggal Pengajuan: ' . ($loan->created_at ? Carbon::parse($loan->created_at)->format('d/m/Y H:i') : '-'),
+                'Tindak lanjut: ' . $target['url'],
+            ], '')
+        );
+
+        if (!$sent) {
+            return back()->withErrors([
+                'error' => 'Pengingat WA belum terkirim. Periksa status notifikasi WA dan nomor HP penerima.',
+            ]);
+        }
+
+        return back()->with('success', 'Pengingat WA berhasil dikirim ke ' . $target['label'] . '.');
     }
 
     public function bendaharaDisbursementStore(Request $request, $id)
@@ -1356,6 +1395,49 @@ class LoanController extends Controller
             ->count();
 
         return (int) round(($finished / count($steps)) * 100);
+    }
+
+    private function loanMonitoringReminderTarget($loan): ?array
+    {
+        if ($loan->status === 'submitted') {
+            return [
+                'role' => 'sekretaris',
+                'label' => 'Sekretaris',
+                'stage' => 'Review Sekretaris',
+                'url' => route('sekretaris.loans.show', $loan->id),
+            ];
+        }
+
+        if ($loan->status === 'approved_treasurer') {
+            return [
+                'role' => 'ketua',
+                'label' => 'Ketua',
+                'stage' => 'Persetujuan Ketua',
+                'url' => route('ketua.loans.show', $loan->id),
+            ];
+        }
+
+        if ($loan->status === 'reviewed') {
+            return [
+                'role' => 'bendahara',
+                'label' => 'Bendahara',
+                'stage' => 'Persetujuan Bendahara',
+                'url' => route('bendahara.loans.show', $loan->id),
+            ];
+        }
+
+        if ($loan->status === 'approved_chairman'
+            && empty($loan->transfered_at)
+            && empty($loan->transfer_evidence_path)) {
+            return [
+                'role' => 'bendahara',
+                'label' => 'Bendahara',
+                'stage' => 'Pencairan Pinjaman',
+                'url' => route('bendahara.loans.disbursement'),
+            ];
+        }
+
+        return null;
     }
 
     private function normalizeApplicantProfile(int $userId, $member): array

@@ -213,6 +213,7 @@ Route::middleware(['session.auth'])->group(function () {
         Route::get('/pinjaman/pencairan', [LoanController::class, 'bendaharaDisbursementIndex'])->name('bendahara.loans.disbursement');
         Route::post('/pinjaman/pencairan/{id}', [LoanController::class, 'bendaharaDisbursementStore'])->name('bendahara.loans.disbursement.store');
         Route::get('/pinjaman/monitoring', [LoanController::class, 'bendaharaMonitoring'])->name('bendahara.loans.monitoring');
+        Route::post('/pinjaman/monitoring/{id}/remind', [LoanController::class, 'bendaharaRemindApproval'])->name('bendahara.loans.monitoring.remind');
         Route::get('/pinjaman/peserta', [LoanPaymentController::class, 'index'])->name('bendahara.loans.payments');
         Route::post('/pinjaman/peserta', [LoanPaymentController::class, 'store'])->name('bendahara.loans.payments.store');
         Route::post('/pinjaman/peserta/pelunasan/{id}/approve', [LoanPaymentController::class, 'approveSettlement'])
