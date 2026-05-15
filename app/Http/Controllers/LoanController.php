@@ -595,6 +595,127 @@ class LoanController extends Controller
         ]);
     }
 
+    public function bendaharaMonitoring(Request $request)
+    {
+        $statusOptions = [
+            'all' => 'Semua Status',
+            'submitted' => 'Menunggu Sekretaris',
+            'approved_treasurer' => 'Menunggu Ketua',
+            'reviewed' => 'Menunggu Bendahara',
+            'pending_disbursement' => 'Menunggu Pencairan',
+            'disbursed' => 'Dicairkan',
+            'rejected' => 'Ditolak',
+        ];
+
+        $selectedStatus = $request->query('status', 'all');
+        if (!array_key_exists($selectedStatus, $statusOptions)) {
+            $selectedStatus = 'all';
+        }
+
+        $availableYears = DB::table('loans')
+            ->selectRaw('YEAR(created_at) as year')
+            ->whereNotNull('created_at')
+            ->distinct()
+            ->orderByDesc('year')
+            ->pluck('year')
+            ->filter()
+            ->values();
+
+        $selectedYear = $request->query('year');
+        $selectedYear = is_numeric($selectedYear) ? (int) $selectedYear : null;
+
+        $baseQuery = DB::table('loans')
+            ->join('users', 'loans.user_id', '=', 'users.id')
+            ->leftJoin('users as sekretaris', 'loans.sekretaris_id', '=', 'sekretaris.id')
+            ->leftJoin('users as bendahara', 'loans.bendahara_id', '=', 'bendahara.id')
+            ->leftJoin('users as ketua', 'loans.ketua_id', '=', 'ketua.id')
+            ->leftJoin('users as pencair', 'loans.transfered_by', '=', 'pencair.id')
+            ->select(
+                'loans.id',
+                'loans.amount',
+                'loans.term_months',
+                'loans.purpose',
+                'loans.status',
+                'loans.created_at',
+                'loans.reviewed_at',
+                'loans.chairman_approved_at',
+                'loans.treasurer_approved_at',
+                'loans.transfered_at',
+                'loans.rejected_at',
+                'loans.pdf_path',
+                'loans.transfer_evidence_path',
+                'users.name',
+                'users.member_no',
+                'sekretaris.name as sekretaris_name',
+                'bendahara.name as bendahara_name',
+                'ketua.name as ketua_name',
+                'pencair.name as transfered_by_name'
+            );
+
+        if ($selectedYear) {
+            $baseQuery->whereYear('loans.created_at', $selectedYear);
+        }
+
+        $this->applyLoanMonitoringStatusFilter($baseQuery, $selectedStatus);
+
+        $statusLabels = config('koperasi.status_labels');
+        $loans = $baseQuery
+            ->orderByDesc('loans.created_at')
+            ->get()
+            ->map(function ($loan) use ($statusLabels) {
+                $loan->process_steps = $this->buildLoanMonitoringSteps($loan);
+                $loan->current_label = $this->loanMonitoringStatusLabel($loan, $statusLabels);
+                $loan->current_badge_class = $this->loanMonitoringBadgeClass($loan);
+                $loan->progress_percent = $this->loanMonitoringProgressPercent($loan->process_steps);
+
+                return $loan;
+            });
+
+        $summaryQuery = DB::table('loans');
+        if ($selectedYear) {
+            $summaryQuery->whereYear('created_at', $selectedYear);
+        }
+
+        $summary = [
+            'total' => (clone $summaryQuery)->count(),
+            'submitted' => (clone $summaryQuery)->where('status', 'submitted')->count(),
+            'chairman_pending' => (clone $summaryQuery)->where('status', 'approved_treasurer')->count(),
+            'treasurer_pending' => (clone $summaryQuery)->where('status', 'reviewed')->count(),
+            'pending_disbursement' => (clone $summaryQuery)
+                ->where('status', 'approved_chairman')
+                ->whereNull('transfered_at')
+                ->whereNull('transfer_evidence_path')
+                ->count(),
+            'disbursed' => (clone $summaryQuery)
+                ->where('status', 'approved_chairman')
+                ->where(function ($query) {
+                    $query->whereNotNull('transfered_at')
+                        ->orWhereNotNull('transfer_evidence_path');
+                })
+                ->count(),
+            'rejected' => (clone $summaryQuery)->where('status', 'rejected')->count(),
+            'total_amount' => (float) (clone $summaryQuery)->sum('amount'),
+            'disbursed_amount' => (float) (clone $summaryQuery)
+                ->where('status', 'approved_chairman')
+                ->where(function ($query) {
+                    $query->whereNotNull('transfered_at')
+                        ->orWhereNotNull('transfer_evidence_path');
+                })
+                ->sum('amount'),
+        ];
+
+        return view('loans.bendahara.monitoring', [
+            'loans' => $loans,
+            'summary' => $summary,
+            'statusOptions' => $statusOptions,
+            'availableYears' => $availableYears,
+            'filters' => [
+                'status' => $selectedStatus,
+                'year' => $selectedYear,
+            ],
+        ]);
+    }
+
     public function bendaharaDisbursementStore(Request $request, $id)
     {
         $payload = $request->validate([
@@ -1075,6 +1196,166 @@ class LoanController extends Controller
                 'bendahara.name as bendahara_name',
                 'ketua.name as ketua_name'
             );
+    }
+
+    private function applyLoanMonitoringStatusFilter($query, string $status): void
+    {
+        if ($status === 'pending_disbursement') {
+            $query->where('loans.status', 'approved_chairman')
+                ->whereNull('loans.transfered_at')
+                ->whereNull('loans.transfer_evidence_path');
+
+            return;
+        }
+
+        if ($status === 'disbursed') {
+            $query->where('loans.status', 'approved_chairman')
+                ->where(function ($innerQuery) {
+                    $innerQuery->whereNotNull('loans.transfered_at')
+                        ->orWhereNotNull('loans.transfer_evidence_path');
+                });
+
+            return;
+        }
+
+        if ($status !== 'all') {
+            $query->where('loans.status', $status);
+        }
+    }
+
+    private function buildLoanMonitoringSteps($loan): array
+    {
+        $rejectedStage = null;
+        if ($loan->status === 'rejected') {
+            if (empty($loan->reviewed_at)) {
+                $rejectedStage = 'secretary';
+            } elseif (empty($loan->chairman_approved_at)) {
+                $rejectedStage = 'chairman';
+            } elseif (empty($loan->treasurer_approved_at)) {
+                $rejectedStage = 'treasurer';
+            } else {
+                $rejectedStage = 'disbursement';
+            }
+        }
+
+        return [
+            [
+                'key' => 'submitted',
+                'label' => 'Pengajuan',
+                'state' => 'done',
+                'time' => $loan->created_at,
+                'actor' => $loan->name,
+            ],
+            [
+                'key' => 'secretary',
+                'label' => 'Review Sekretaris',
+                'state' => $this->loanMonitoringStepState($loan, 'secretary', $rejectedStage),
+                'time' => $loan->reviewed_at ?: $loan->rejected_at,
+                'actor' => $loan->sekretaris_name,
+            ],
+            [
+                'key' => 'chairman',
+                'label' => 'Persetujuan Ketua',
+                'state' => $this->loanMonitoringStepState($loan, 'chairman', $rejectedStage),
+                'time' => $loan->chairman_approved_at ?: ($rejectedStage === 'chairman' ? $loan->rejected_at : null),
+                'actor' => $loan->ketua_name,
+            ],
+            [
+                'key' => 'treasurer',
+                'label' => 'Persetujuan Bendahara',
+                'state' => $this->loanMonitoringStepState($loan, 'treasurer', $rejectedStage),
+                'time' => $loan->treasurer_approved_at ?: ($rejectedStage === 'treasurer' ? $loan->rejected_at : null),
+                'actor' => $loan->bendahara_name,
+            ],
+            [
+                'key' => 'disbursement',
+                'label' => 'Pencairan',
+                'state' => $this->loanMonitoringStepState($loan, 'disbursement', $rejectedStage),
+                'time' => $loan->transfered_at ?: ($rejectedStage === 'disbursement' ? $loan->rejected_at : null),
+                'actor' => $loan->transfered_by_name,
+            ],
+        ];
+    }
+
+    private function loanMonitoringStepState($loan, string $stage, ?string $rejectedStage): string
+    {
+        if ($rejectedStage === $stage) {
+            return 'failed';
+        }
+
+        if ($stage === 'secretary') {
+            if (!empty($loan->reviewed_at)) {
+                return 'done';
+            }
+
+            return $loan->status === 'submitted' ? 'active' : 'waiting';
+        }
+
+        if ($stage === 'chairman') {
+            if (!empty($loan->chairman_approved_at)) {
+                return 'done';
+            }
+
+            return $loan->status === 'approved_treasurer' ? 'active' : 'waiting';
+        }
+
+        if ($stage === 'treasurer') {
+            if (!empty($loan->treasurer_approved_at)) {
+                return 'done';
+            }
+
+            return $loan->status === 'reviewed' ? 'active' : 'waiting';
+        }
+
+        if ($stage === 'disbursement') {
+            if (!empty($loan->transfered_at) || !empty($loan->transfer_evidence_path)) {
+                return 'done';
+            }
+
+            return $loan->status === 'approved_chairman' ? 'active' : 'waiting';
+        }
+
+        return 'waiting';
+    }
+
+    private function loanMonitoringStatusLabel($loan, array $statusLabels): string
+    {
+        if ($loan->status === 'approved_chairman') {
+            if (!empty($loan->transfered_at) || !empty($loan->transfer_evidence_path)) {
+                return 'Dicairkan';
+            }
+
+            return 'Menunggu Pencairan';
+        }
+
+        return $statusLabels[$loan->status] ?? ucfirst((string) $loan->status);
+    }
+
+    private function loanMonitoringBadgeClass($loan): string
+    {
+        if ($loan->status === 'rejected') {
+            return 'status-pill--danger';
+        }
+
+        if ($loan->status === 'approved_chairman'
+            && (!empty($loan->transfered_at) || !empty($loan->transfer_evidence_path))) {
+            return 'status-pill--success';
+        }
+
+        return 'status-pill--warning';
+    }
+
+    private function loanMonitoringProgressPercent(array $steps): int
+    {
+        if (empty($steps)) {
+            return 0;
+        }
+
+        $finished = collect($steps)
+            ->filter(fn ($step) => in_array($step['state'], ['done', 'failed']))
+            ->count();
+
+        return (int) round(($finished / count($steps)) * 100);
     }
 
     private function normalizeApplicantProfile(int $userId, $member): array

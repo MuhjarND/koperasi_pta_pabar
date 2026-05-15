@@ -127,6 +127,10 @@
                     <span class="nav-badge">{{ $pendingDisbursements }}</span>
                 @endif
             </a>
+            <a href="{{ route('bendahara.loans.monitoring') }}" class="nav-approval nav-state--ok {{ request()->routeIs('bendahara.loans.monitoring') ? 'active' : '' }}">
+                @include('partials.icon', ['name' => 'history'])
+                <span>Monitoring Pinjaman</span>
+            </a>
             <a href="{{ route('bendahara.loans.payments') }}" class="nav-approval {{ $pendingSettlements > 0 ? 'nav-state--pending' : 'nav-state--ok' }} {{ request()->routeIs('bendahara.loans.payments*') ? 'active' : '' }}">
                 @include('partials.icon', ['name' => 'users'])
                 <span>Validasi Pelunasan</span>

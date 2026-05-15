@@ -551,6 +551,7 @@ class KoperasiRekapSeeder extends Seeder
 
             $entryDate = $this->resolveMonthCashDate($month, $monthTotal, $bendaharaRows, $targetYear);
             $stats['month_dates'][$month] = $entryDate;
+            $shouldPostCash = $shouldPostFinancial && !empty($bendaharaRows[$month]);
 
             foreach ($monthEntries as $entry) {
                 $userId = $entry['user']['id'];
@@ -598,7 +599,7 @@ class KoperasiRekapSeeder extends Seeder
                 );
                 $stats['log_count']++;
 
-                if ($shouldPostFinancial) {
+                if ($shouldPostCash) {
                     DB::table('cash_entries')->updateOrInsert(
                         [
                             'entry_date' => $entryDate,
@@ -870,6 +871,7 @@ class KoperasiRekapSeeder extends Seeder
             $user = null;
             $category = null;
             $manualSavingsTypes = null;
+            $manualSavingsNote = 'Import Rekap Keu';
 
             if ($description === 'Saldo') {
                 $category = 'saldo_awal';
@@ -881,6 +883,7 @@ class KoperasiRekapSeeder extends Seeder
                     $stats['missing_users'][] = $memberName;
                 }
                 $manualSavingsTypes = ['sukarela' => $amount];
+                $manualSavingsNote = 'Terima Simpanan Sukarela Rekap Keu';
             } elseif (stripos($description, 'Penerimaan Anggota Baru') === 0) {
                 $category = 'simpanan';
                 $memberName = trim(substr($description, strlen('Penerimaan Anggota Baru')));
@@ -910,6 +913,8 @@ class KoperasiRekapSeeder extends Seeder
                 if (!$user && $memberName !== '') {
                     $stats['missing_users'][] = $memberName;
                 }
+            } elseif (stripos($description, 'Terima Potongan') === 0) {
+                continue;
             } elseif (preg_match('/^(Pinjaman|Peminjaman)/i', $description)) {
                 $category = 'peminjaman';
                 $memberName = $this->extractNameAfterKeyword($description, ['Peminjaman', 'Pinjaman']);
@@ -953,7 +958,7 @@ class KoperasiRekapSeeder extends Seeder
                         [
                             'user_id' => $user['id'],
                             'type' => $type,
-                            'note' => 'Import Rekap Keu',
+                            'note' => $manualSavingsNote,
                             'created_at' => $row['date'] . ' 00:00:00',
                         ],
                         [
@@ -1012,6 +1017,16 @@ class KoperasiRekapSeeder extends Seeder
             ];
         }
 
+        $manualSukarelaRows = DB::table('savings_transactions')
+            ->select('user_id', 'type', DB::raw('SUM(amount) as total'))
+            ->where('note', 'Terima Simpanan Sukarela Rekap Keu')
+            ->groupBy('user_id', 'type')
+            ->get();
+        $manualSukarelaByUser = [];
+        foreach ($manualSukarelaRows as $row) {
+            $manualSukarelaByUser[$row->user_id][$row->type] = (float) $row->total;
+        }
+
         foreach ($expectedByUser as $userId => $expected) {
             $actualRows = DB::table('savings_transactions')
                 ->select('type', DB::raw('SUM(amount) as total'))
@@ -1022,7 +1037,7 @@ class KoperasiRekapSeeder extends Seeder
 
             foreach (['pokok', 'wajib', 'sukarela'] as $type) {
                 $actual = isset($actualRows[$type]) ? (float) $actualRows[$type]->total : 0.0;
-                $expectedAmount = (float) $expected[$type];
+                $expectedAmount = (float) $expected[$type] + (float) ($manualSukarelaByUser[$userId][$type] ?? 0);
                 $diff = round($expectedAmount - $actual, 2);
 
                 $key = [
